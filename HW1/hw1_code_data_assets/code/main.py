@@ -1,8 +1,8 @@
-'''
+"""
     Adapted from course 16831 (Statistical Techniques).
     Initially written by Paloma Sodhi (psodhi@cs.cmu.edu), 2018
     Updated by Wei Dong (weidong@andrew.cmu.edu), 2021
-'''
+"""
 
 import argparse
 import numpy as np
@@ -16,21 +16,23 @@ from resampling import Resampling
 from matplotlib import pyplot as plt
 from matplotlib import figure as fig
 import time
+import tqdm
+from tqdm.gui import tqdm
 
 
 def visualize_map(occupancy_map):
     fig = plt.figure()
     mng = plt.get_current_fig_manager()
     plt.ion()
-    plt.imshow(occupancy_map, cmap='Greys')
+    plt.imshow(occupancy_map, cmap="Greys")
     plt.axis([0, 800, 0, 800])
 
 
 def visualize_timestep(X_bar, tstep, output_path):
     x_locs = X_bar[:, 0] / 10.0
     y_locs = X_bar[:, 1] / 10.0
-    scat = plt.scatter(x_locs, y_locs, c='r', marker='o')
-    plt.savefig('{}/{:04d}.png'.format(output_path, tstep))
+    scat = plt.scatter(x_locs, y_locs, c="r", marker="o")
+    plt.savefig("{}/{:04d}.png".format(output_path, tstep))
     plt.pause(0.00001)
     scat.remove()
 
@@ -63,7 +65,7 @@ def init_particles_freespace(num_particles, occupancy_map):
     return X_bar_init
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     """
     Description of variables used
     u_t0 : particle state odometry reading [x, y, theta] at time (t-1) [odometry_frame]
@@ -77,11 +79,11 @@ if __name__ == '__main__':
     Initialize Parameters
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_to_map', default='hw1_code_data_assets/data/map/wean.dat')
-    parser.add_argument('--path_to_log', default='hw1_code_data_assets/data/log/robotdata1.log')
-    parser.add_argument('--output', default='results')
-    parser.add_argument('--num_particles', default=500, type=int)
-    parser.add_argument('--visualize', action='store_true')
+    parser.add_argument("--path_to_map", default="hw1_code_data_assets/data/map/wean.dat")
+    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata1.log")
+    parser.add_argument("--output", default="results")
+    parser.add_argument("--num_particles", default=500, type=int)
+    parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
     src_path_map = args.path_to_map
@@ -90,7 +92,7 @@ if __name__ == '__main__':
 
     map_obj = MapReader(src_path_map)
     occupancy_map = map_obj.get_map()
-    logfile = open(src_path_log, 'r')
+    logfile = open(src_path_log, "r")
 
     motion_model = MotionModel()
     sensor_model = SensorModel(occupancy_map)
@@ -106,14 +108,14 @@ if __name__ == '__main__':
         visualize_map(occupancy_map)
 
     first_time_idx = True
-    for time_idx, line in enumerate(logfile):
+    for time_idx, line in tqdm(enumerate(logfile), desc="Working on Log File"):
 
         # Read a single 'line' from the log file (can be either odometry or laser measurement)
         # L : laser scan measurement, O : odometry measurement
         meas_type = line[0]
 
         # convert measurement values from string to double
-        meas_vals = np.fromstring(line[2:], dtype=np.float64, sep=' ')
+        meas_vals = np.fromstring(line[2:], dtype=np.float64, sep=" ")
 
         # odometry reading [x, y, theta] in odometry frame
         odometry_robot = meas_vals[0:3]
@@ -123,14 +125,14 @@ if __name__ == '__main__':
         # if ((time_stamp <= 0.0) | (meas_type == "O")):
         #     continue
 
-        if (meas_type == "L"):
+        if meas_type == "L":
             # [x, y, theta] coordinates of laser in odometry frame
             odometry_laser = meas_vals[3:6]
             # 180 range measurement values from single laser scan
             ranges = meas_vals[6:-1]
 
-        print("Processing time step {} at time {}s".format(
-            time_idx, time_stamp))
+        if time_idx % 100 == 0:
+            print("Processing time step {} at time {}s".format(time_idx, time_stamp))
 
         if first_time_idx:
             u_t0 = odometry_robot
@@ -152,7 +154,7 @@ if __name__ == '__main__':
             """
             SENSOR MODEL
             """
-            if (meas_type == "L"):
+            if meas_type == "L":
                 z_t = ranges
                 w_t = sensor_model.beam_range_finder_model(z_t, x_t1)
                 X_bar_new[m, :] = np.hstack((x_t1, w_t))
