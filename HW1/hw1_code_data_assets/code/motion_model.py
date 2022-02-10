@@ -36,7 +36,7 @@ class MotionModel:
         """
         TODO : Update the function for vectorized 2D inputs
         """
-        #* Degree to Radians
+        # * Degree to Radians
         x_t0[2] = np.deg2rad(x_t0[2])
         u_t0[2] = np.deg2rad(u_t0[2])
         u_t1[2] = np.deg2rad(u_t1[2])
@@ -47,7 +47,7 @@ class MotionModel:
         x, y, theta = x_t0[0], x_t0[1], x_t0[2]
         # x, y, theta = x_t0[:, 0], x_t0[:, 1], x_t0[:, 2]
 
-        #* Motion Parameters
+        # * Motion Parameters
         d_rot_1 = np.arctan2(u_t1[1] - u_t0[1], u_t1[0] - u_t0[0]) - u_t0[2]
         d_trans = np.linalg.norm(u_t1[0:2] - u_t0[0:2])
         d_rot_2 = u_t1[2] - u_t0[2] - d_rot_1
@@ -55,18 +55,18 @@ class MotionModel:
         # d_trans = np.linalg.norm(u_t1[:, 0:2] - u_t0[:, 0:2])   #! Check the axis
         # d_rot_2 = u_t1[:, 2] - u_t0[:, 2] - d_rot_1
 
-        #* Relative Motion Parameters
-        hd_rot_1 = d_rot_1 - sample_nd(self._alpha1 * np.power(d_rot_1, 2) + self._alpha2 * np.power(d_trans, 2))
-        hd_trans = d_trans - sample_nd(
+        # * Relative Motion Parameters
+        hd_rot_1 = d_rot_1 - self.sample_nd(self._alpha1 * np.power(d_rot_1, 2) + self._alpha2 * np.power(d_trans, 2))
+        hd_trans = d_trans - self.sample_nd(
             self._alpha3 * np.power(d_trans, 2) + self._alpha4 * np.power(d_rot_1, 2) + self._alpha4 * np.power(d_rot_2, 2)
         )
-        hd_rot_2 = d_rot_2 - sample_nd(self._alpha1 * np.power(d_rot_2, 2) + self._alpha2 * np.power(d_trans, 2))
+        hd_rot_2 = d_rot_2 - self.sample_nd(self._alpha1 * np.power(d_rot_2, 2) + self._alpha2 * np.power(d_trans, 2))
 
-        #* Contstrain [-pi, pi]
-        hd_rot_1 = clip(hd_rot_1)
-        hd_rot_2 = clip(hd_rot_2)
+        # * Contstrain [-pi, pi]
+        hd_rot_1 = self.wrap_to_pi(hd_rot_1)
+        hd_rot_2 = self.wrap_to_pi(hd_rot_2)
 
-        #* Sample for state xt
+        # * Sample for state xt
         x_t1 = np.zeros_like(x_t0)
         x_t1[0] = x + hd_trans * np.cos(theta + hd_rot_1)  # x
         x_t1[1] = y + hd_trans * np.sin(theta + hd_rot_1)  # y
@@ -76,3 +76,14 @@ class MotionModel:
         # x_t1[:, 2] = theta + hd_rot_1 + hd_rot_2  # theta
 
         return x_t1
+
+    def prob_nd(self, a, bb):
+        return np.power(2 * np.pi * bb, -0.5) * np.exp(-(a**2) / (2 * bb))
+
+    def sample_nd(self, bb):
+        return 0.5 * np.sum(np.random.normal(loc=0, scale=np.sqrt(bb), size=12))
+
+    def wrap_to_pi(self, a):
+        mod = a % np.pi
+        mod = mod - 2 * np.pi if mod > np.pi else mod
+        return mod
