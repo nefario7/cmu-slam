@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     # * Define the models for MCL
     motion_model = MotionModel()
-    sensor_model = SensorModel(occupancy_map)
+    sensor_model = SensorModel(map_obj)
     resampler = Resampling()
 
     # * Particles and Initialization
@@ -113,23 +113,13 @@ if __name__ == "__main__":
     for time_idx, line in tqdm(enumerate(logfile), desc="Working on Log File"):
 
         # Read a single 'line' from the log file (can be either odometry or laser measurement)
-        """
-        L -94.234001 -139.953995 -1.342158 -88.567719 -164.303391 -1.342158
-        66 66 66 66 66 65 66 66 65 66 66 66 66 66 67 67 67 66 67 66 67 67 67 68 68 68 69 67
-        530 514 506 508 494 481 470 458 445 420 410 402 393 386 379 371 365 363 363 364 358
-        353 349 344 339 335 332 328 324 321 304 299 298 294 291 288 287 284 282 281 277 277
-        276 274 273 271 269 268 267 266 265 265 264 263 263 263 262 261 261 261 261 261 193
-        190 189 189 192 262 262 264 194 191 190 190 193 269 271 272 274 275 277 279 279 281
-        283 285 288 289 292 295 298 300 303 306 309 314 318 321 325 329 335 340 360 366 372
-        378 384 92 92 91 89 88 87 86 85 84 83 82 82 81 81 80 79 78 78 77 76 76 76 75 75 74
-        74 73 73 72 72 72 71 72 71 71 71 71 71 71 71 71 70 70 70 70 0.025466
-        """
         # L : laser scan measurement, O : odometry measurement
 
         meas_type = line[0]
+
         # convert measurement values from string to double
         meas_vals = np.fromstring(line[2:], dtype=np.float64, sep=" ")
-        print(meas_vals.shape)
+
         # odometry reading [x, y, theta] in odometry frame
         odometry_robot = meas_vals[0:3]
         time_stamp = meas_vals[-1]
@@ -155,45 +145,24 @@ if __name__ == "__main__":
         X_bar_new = np.zeros((num_particles, 4), dtype=np.float64)
         u_t1 = odometry_robot
 
-        #! Note: this formulation is intuitive but not vectorized; looping in python is SLOW.
-        #! Vectorized version will receive a bonus. i.e., the functions take all particles as the input and process them in a vector.
-        for m in range(0, num_particles):
-            """
-            * MOTION MODEL
-            """
-            x_t0 = X_bar[m, 0:3]
-            x_t1 = motion_model.update(u_t0, u_t1, x_t0)
+        print("\n-----------------Motion Model-----------------")
+        x_t0 = X_bar[:, 0:3]
+        x_t1 = motion_model.update(u_t0, u_t1, x_t0)
+        print(x_t0.shape, x_t1.shape)
 
-            """
-            * SENSOR MODEL
-            """
-            if meas_type == "L":
-                z_t = ranges
-                w_t = sensor_model.beam_range_finder_model(z_t, x_t1)
-                X_bar_new[m, :] = np.hstack((x_t1, w_t))
-            # else:
-            #     X_bar_new[m, :] = np.hstack((x_t1, X_bar[m, 3]))
+        print("\n-----------------Sensor Model-----------------")
+        if meas_type == "L":
+            z_t = ranges
+            w_t = sensor_model.beam_range_finder_model(z_t, x_t1)  # M x 1
+            X_bar_new[m, :] = np.hstack((x_t1, w_t))  # M x 4
+        # else:
+        #     X_bar_new[m, :] = np.hstack((x_t1, X_bar[m, 3]))
 
-        X_bar = X_bar_new
-        u_t0 = u_t1
+        X_bar = X_bar_new  # Update particles data
+        u_t0 = u_t1  # Update the previous state to current state
 
-        """
-        * RESAMPLING
-        """
-        X_bar = resampler.low_variance_sampler(X_bar)
+        print("\n------------------Resampling------------------")
+        X_bar = resampler.low_variance_sampler(X_bar)  # ? M x 4
 
         if args.visualize:
             visualize_timestep(X_bar, time_idx, args.output)
-
-        # #! Vectorization
-        # x_t0 = X_bar[:, 0:3]  # M x 3
-        # x_t1 = motion_model.update(u_t0, u_t1, x_t0)  # M x 3
-        # if meas_type == "L":
-        #     z_t = ranges  # 1 x 180
-        #     w_t = sensor_mode.beam_range_finder_model(z_t, x_t1)  # ? M x 1
-        #     X_bar_new[m, :] = np.hstack((x_t1, w_t))  # ? M x 4
-
-        # X_bar = X_bar_new  # Update particles data
-        # u_t0 = u_t1  # Update the previous state to current state
-
-        # X_bar = resampler.low_variance_sampler(X_bar)  # ? M x 4
