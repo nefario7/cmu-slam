@@ -20,8 +20,8 @@ class MotionModel:
         TODO : Tune Motion Model parameters here
         The original numbers are for reference but HAVE TO be tuned.
         """
-        self._alpha1 = 0.01
-        self._alpha2 = 0.01
+        self._alpha1 = 0.05
+        self._alpha2 = 0.05
         self._alpha3 = 0.01
         self._alpha4 = 0.01
 
@@ -35,11 +35,15 @@ class MotionModel:
         """
         TODO : Update the function for vectorized 2D inputs
         """
+        # if (u_t1[0] == u_t0[0]) and (u_t1[1] == u_t0[1]) and (u_t1[2] == u_t0[2]):
+        #     x_t1 = x_t0
+        #     return x_t1
+
         x, y, theta = x_t0[:, 0], x_t0[:, 1], x_t0[:, 2]
 
         # * Motion Parameters
         d_rot_1 = np.arctan2(u_t1[1] - u_t0[1], u_t1[0] - u_t0[0]) - u_t0[2]
-        d_trans = np.linalg.norm(u_t1[0:2] - u_t0[0:2])  #! Check the axis
+        d_trans = np.linalg.norm(u_t1[0:2] - u_t0[0:2])
         d_rot_2 = u_t1[2] - u_t0[2] - d_rot_1
 
         # * Relative Motion Parameters
@@ -65,9 +69,7 @@ class MotionModel:
         return np.power(2 * np.pi * bb, -0.5) * np.exp(-(a**2) / (2 * bb))
 
     def sample_nd(self, bb):
-        return 0.5 * np.sum(np.random.normal(loc=0, scale=np.sqrt(bb), size=12))
+        return np.random.normal(loc=0, scale=np.sqrt(bb))
 
-    def wrap_to_pi(self, a):
-        mod = a % np.pi
-        mod = mod - 2 * np.pi if mod > np.pi else mod
-        return mod
+    def wrap_to_pi(self, angle):
+        return angle - 2 * np.pi * np.floor((angle + np.pi) / (2 * np.pi))
