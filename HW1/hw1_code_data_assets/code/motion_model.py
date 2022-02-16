@@ -20,10 +20,10 @@ class MotionModel:
         TODO : Tune Motion Model parameters here
         The original numbers are for reference but HAVE TO be tuned.
         """
-        self._alpha1 = 0.05
-        self._alpha2 = 0.05
-        self._alpha3 = 0.01
-        self._alpha4 = 0.01
+        self._alpha1 = 0.005
+        self._alpha2 = 0.005
+        self._alpha3 = 0.0001
+        self._alpha4 = 0.0001
 
     def update(self, u_t0, u_t1, x_t0):
         """
@@ -35,15 +35,16 @@ class MotionModel:
         """
         TODO : Update the function for vectorized 2D inputs
         """
-        # if (u_t1[0] == u_t0[0]) and (u_t1[1] == u_t0[1]) and (u_t1[2] == u_t0[2]):
-        #     x_t1 = x_t0
-        #     return x_t1
+        if (u_t1[0] == u_t0[0]) and (u_t1[1] == u_t0[1]) and (u_t1[2] == u_t0[2]):
+            x_t1 = x_t0
+            return x_t1
 
         x, y, theta = x_t0[:, 0], x_t0[:, 1], x_t0[:, 2]
 
         # * Motion Parameters
         d_rot_1 = np.arctan2(u_t1[1] - u_t0[1], u_t1[0] - u_t0[0]) - u_t0[2]
-        d_trans = np.linalg.norm(u_t1[0:2] - u_t0[0:2])
+        # d_trans = np.linalg.norm(u_t1[0:2] - u_t0[0:2])
+        d_trans = np.sqrt((u_t1[0] - u_t0[0]) ** 2 + (u_t1[1] - u_t0[1]) ** 2)
         d_rot_2 = u_t1[2] - u_t0[2] - d_rot_1
 
         # * Relative Motion Parameters

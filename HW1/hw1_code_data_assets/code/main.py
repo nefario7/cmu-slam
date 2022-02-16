@@ -20,31 +20,25 @@ import time
 import matplotlib
 from tqdm import tqdm
 
-matplotlib.use("TkAgg")
-np.random.seed(1)
+# matplotlib.use("TkAgg")
+# np.random.seed(11)
 
 
 def visualize_map(occupancy_map):
-    fig = plt.figure(figsize=(10, 10))
+    fig = plt.figure()
     mng = plt.get_current_fig_manager()
     plt.ion()
     plt.imshow(occupancy_map, cmap="Greys")
     plt.axis([0, 800, 0, 800])
-
-    # xmin, xmax = plt.xlim()
-    # ymin, ymax = plt.ylim()
-    # scale_factor = 2
-    # plt.xlim(xmin * scale_factor, xmax * scale_factor)
-    # plt.ylim(ymin * scale_factor, ymax * scale_factor)
+    fig.show()
 
 
 def visualize_timestep(X_bar, tstep, output_path):
     x_locs = X_bar[:, 0] / 10.0
     y_locs = X_bar[:, 1] / 10.0
-    w = X_bar[:, 3]
     scat = plt.scatter(x_locs, y_locs, c="r", marker=".")
-    plt.savefig("{}/{:04d}.png".format(output_path, tstep))
-    plt.pause(1)
+    # plt.savefig("{}/{:04d}.png".format(output_path, tstep))
+    plt.pause(0.00001)
     scat.remove()
 
 
@@ -64,28 +58,43 @@ def init_particles_random(num_particles):
     return X_bar_init
 
 
-def init_particles_freespace(num_particles, occupancy_map, rx=None, ry=None):
+def init_particles_freespace(num_particles, occupancy_map):
 
     # initialize [x, y, theta] positions in world_frame for all particles
     """
     This version converges faster than init_particles_random
     """
-    occupancy_map = occupancy_map.T
-    freespace = (occupancy_map >= 0) & (occupancy_map <= 0.35)
-    freespace_x = freespace.nonzero()[0] * 10
-    freespace_y = freespace.nonzero()[1] * 10
+    x0_vals = []
+    y0_vals = []
+    while len(x0_vals) < num_particles:
+        y = np.random.uniform(0, 7000, (num_particles, 1))
+        x = np.random.uniform(3000, 7000, (num_particles, 1))
+        y_idx = (y / 10.0).astype(int)
+        x_idx = (x / 10.0).astype(int)
+        for i in range(num_particles):
+            if np.abs(occupancy_map[y_idx[i], x_idx[i]]) == 0 and np.abs(occupancy_map[y_idx[i], x_idx[i]]) <= 0.35:
+                if len(x0_vals) < num_particles:
+                    x0_vals.append(x[i])
+                    y0_vals.append(y[i])
+        if len(x0_vals) == num_particles:
+            break
 
-    assert num_particles < freespace_x.shape[0], "Too many particles! No. of particles > Free space points"
+    x0_vals = np.array(x0_vals)
+    y0_vals = np.array(y0_vals)
 
-    # initialize [x, y, theta] positions in world_frame for all particles
-    x0_vals = np.random.choice(freespace_x, (num_particles, 1), replace=False)
-    y0_vals = np.random.choice(freespace_y, (num_particles, 1), replace=False)
-    theta0_vals = np.random.uniform(-3.14, 3.14, (num_particles, 1))
+    # occupancy_map = occupancy_map.T
+    # freespace = occupancy_map * ((occupancy_map >= 0) & (occupancy_map <= 0.35))
+    # freespace = np.where(occupancy_map == 0, 1, 0)
+    # freespace_x = freespace.nonzero()[0] * 10
+    # freespace_y = freespace.nonzero()[1] * 10
+    # assert num_particles < freespace_x.shape[0], "Too many particles! No. of particles > Free space points"
+    # x0_vals = np.random.choice(freespace_x, (num_particles, 1), replace=False)
+    # y0_vals = np.random.choice(freespace_y, (num_particles, 1), replace=False)
 
-    # initialize weights for all particles
+    theta0_vals = np.random.uniform(-np.pi, np.pi, (num_particles, 1))
     w0_vals = np.ones((num_particles, 1), dtype=np.float64)
     w0_vals = w0_vals / num_particles
-
+    print(x0_vals.shape, y0_vals.shape, theta0_vals.shape, w0_vals.shape)
     X_bar_init = np.hstack((x0_vals, y0_vals, theta0_vals, w0_vals))
 
     return X_bar_init
@@ -107,7 +116,7 @@ if __name__ == "__main__":
     parser.add_argument("--path_to_map", default="hw1_code_data_assets/data/map/wean.dat")
     parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata1.log")
     parser.add_argument("--output", default="hw1_code_data_assets/results")
-    parser.add_argument("--num_particles", default=25, type=int)
+    parser.add_argument("--num_particles", default=1000, type=int)
     parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
@@ -117,6 +126,7 @@ if __name__ == "__main__":
     src_path_log = args.path_to_log
     os.makedirs(args.output, exist_ok=True)
 
+    # * Object Definitions
     map_obj = MapReader(src_path_map)
     occupancy_map = map_obj.get_map()
     logfile = open(src_path_log, "r")
@@ -128,17 +138,24 @@ if __name__ == "__main__":
 
     # * Particles and Initialization
     num_particles = args.num_particles
-    # X_bar = init_particles_random(num_particles)
-    X_bar = init_particles_freespace(num_particles, occupancy_map)
-    print(X_bar)
 
-    # * Monte Carlo Localization Algorithm : Main Loop
+    if num_particles == 1:
+        X_bar = np.array([[4000, 4000, np.pi / 2, 1], [4000, 4000, np.pi / 2, 1]])
+    else:
+        # X_bar = init_particles_random(num_particles)
+        X_bar = init_particles_freespace(num_particles, occupancy_map)
+
     visualize_map(occupancy_map)
     visualize_timestep(X_bar, 1000000, args.output)
-    first_time_idx = True
 
-    rand_idx = np.random.randint(0, num_particles)
+    # * Monte Carlo Localization Algorithm : Main Loop
+    first_time_idx = True
     for time_idx, line in enumerate(logfile):
+        rand_idx = np.random.randint(0, num_particles)
+
+        # if time_idx > 50:
+        # continue
+
         meas_type = line[0]
         meas_vals = np.fromstring(line[2:], dtype=np.float64, sep=" ")
 
@@ -146,9 +163,9 @@ if __name__ == "__main__":
         odometry_robot = meas_vals[0:3]
         time_stamp = meas_vals[-1]
 
-        #! ignore pure odometry measurements for (faster debugging)
-        if (time_stamp <= 0.0) | (meas_type == "O"):
-            continue
+        # ignore pure odometry measurements for (faster debugging)
+        # if ((time_stamp <= 0.0) | (meas_type == "O")):
+        #     continue
 
         if meas_type == "L":
             odometry_laser = meas_vals[3:6]
@@ -174,25 +191,28 @@ if __name__ == "__main__":
             z_t = ranges
             w_t, z_star = sensor_model.beam_range_finder_model(z_t, x_t1, time_idx)
             X_bar_new = np.hstack((x_t1, w_t))
-        # else:
-        #     X_bar_new = np.hstack((x_t1, X_bar[:, 3]))
 
-        X_bar = X_bar_new  # Update particles data
-        u_t0 = u_t1  # Update the previous state to current state
+            # z_values = z_star[rand_idx]
+            # x_val = X_bar[rand_idx, 0]
+            # y_val = X_bar[rand_idx, 1]
+            # theta_val = X_bar[rand_idx, 2]
+            # # print(z_values, x_val, y_val, theta_val)
+            # angles = np.arange(np.pi / 2, -np.pi / 2, -np.pi / 30)
+            # for i, a in enumerate(angles):
+            #     p1 = [(x_val) / 10, (x_val + z_values[i] * np.cos(theta_val + a)) / 10]
+            #     p2 = [(y_val) / 10, (y_val + z_values[i] * np.sin(theta_val + a)) / 10]
+            #     (rays,) = plt.plot(p1, p2, "b", lw=0.5)
+            # rays.remove()
+        else:
+            old_w_t = np.array(X_bar[:, 3])
+            X_bar_new = np.hstack((x_t1, old_w_t[:, None]))
+
+        X_bar = X_bar_new
+        u_t0 = u_t1
 
         # * Resampling
         if meas_type == "L":
             X_bar = resampler.low_variance_sampler(X_bar)
-
-        z_values = z_star[rand_idx]
-        x_val = X_bar[rand_idx, 0]
-        y_val = X_bar[rand_idx, 1]
-        theta_val = X_bar[rand_idx, 2] - (np.pi / 2)
-        print(x_val, y_val, theta_val)
-        angles = np.arange(np.pi / 2, -np.pi / 2, -np.pi / 36)
-        for i, a in enumerate(angles):
-            p1 = [(x_val) / 10, (x_val + z_values[i] * np.cos(a)) / 10]
-            p2 = [(y_val) / 10, (y_val + z_values[i] * np.sin(a)) / 10]
-            rays = plt.plot(p1, p2, "b", lw=0.5)
+            # print(X_bar[:, 3])
 
         visualize_timestep(X_bar, time_idx, args.output)
