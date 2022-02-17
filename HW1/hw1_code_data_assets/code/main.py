@@ -115,9 +115,9 @@ if __name__ == "__main__":
     # * Initialize Parameters
     parser = argparse.ArgumentParser()
     parser.add_argument("--path_to_map", default="hw1_code_data_assets/data/map/wean.dat")
-    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata2.log")
+    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata1.log")
     parser.add_argument("--output", default="hw1_code_data_assets/results")
-    parser.add_argument("--num_particles", default=500, type=int)
+    parser.add_argument("--num_particles", default=1000, type=int)
     parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 

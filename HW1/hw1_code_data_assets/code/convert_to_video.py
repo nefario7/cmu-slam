@@ -8,7 +8,7 @@ Script to convert frames into a video for submission
 """
 
 # * Logfile to be processed
-logfile = 3
+logfile = 2
 base_path = r"D:\CMU\Academics\SLAM\Homeworks\HW1\hw1_code_data_assets\results"
 log_path = base_path + "-robotdata" + str(logfile)
 print("Log path : ", log_path)
@@ -28,7 +28,7 @@ print("Created directory : ", base_path)
 # * Save frames into video
 video_path = os.path.join(base_path, "robotlog" + str(logfile) + ".avi")
 print("Video Path : ", video_path)
-out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"DIVX"), 15, size)
+out = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"DIVX"), 60, size)
 
 
 for i in tqdm(range(len(img_array)), desc="Writing Video"):
