@@ -1,2 +1,14 @@
 .slam
 *.pyc
+
+#HW1
+HW1/hw1_code_data_assets/results-robotdata*
+HW1/hw1_code_data_assets/results/robotlog1_old.avi
+HW1/hw1_code_data_assets/results/robotlog1_old2.avi
+HW1/hw1_code_data_assets/results/robotlog1.avi
+HW1/hw1_code_data_assets/results/robotlog2.avi
+HW1/hw1_code_data_assets/results/robotlog3.avi
+HW1/hw1_code_data_assets/results/robotlog4.avi
+HW1/hw1_code_data_assets/results/robotlog5.avi
+
+#HW2
