@@ -42,13 +42,7 @@ class Resampling:
         M = X_bar.shape[0]
 
         # * Normalization
-        # X_bar[:, 3] = np.exp(X_bar[:, 3])
-        # print(X_bar[:, 3])
-        # print(np.max(X_bar[:, 3]))
-        try:
-            X_bar[:, 3] = X_bar[:, 3] / np.sum(X_bar[:, 3])
-        except:
-            print("Encountered Error!")
+        X_bar[:, 3] = X_bar[:, 3] / np.sum(X_bar[:, 3])
 
         r = np.random.uniform(0, 1.0 / M)
         c = X_bar[0, 3]

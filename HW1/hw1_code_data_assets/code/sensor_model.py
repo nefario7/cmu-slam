@@ -26,13 +26,13 @@ class SensorModel:
         The original numbers are for reference but HAVE TO be tuned.
         """
         self._z_hit = 150
-        self._z_short = 0.8
-        self._z_max = 0.5
+        self._z_short = 2
+        self._z_max = 0.5  # 0.5
         self._z_rand = 100
         self._z_params = np.array([self._z_hit, self._z_short, self._z_max, self._z_rand])
 
-        self._sigma_hit = 60
-        self._lambda_short = 0.1
+        self._sigma_hit = 50
+        self._lambda_short = 0.01
 
         # Used in p_max and p_rand, optionally in ray casting
         self._max_range = 1000
@@ -41,10 +41,10 @@ class SensorModel:
         self._min_probability = 0.35
 
         # Used in sampling angles in ray casting
-        self._subsampling = 6  #! 20
+        self._subsampling = 5  #! 20
         self.n_beams = int(180 / self._subsampling)
         self.max_laser_range = 1000
-        self.step_size = 5  #! 250
+        self.step_size = 10  #! 250
 
         # assert self._max_range == self.max_laser_range
 
@@ -74,6 +74,7 @@ class SensorModel:
 
         # * Short
         eta = 1.0 / (1 - np.exp(-self._lambda_short * z_star))
+        # eta = 1.0
         p_short = eta * self._lambda_short * np.exp(-self._lambda_short * z_samples)
         # print(eta, p_short)
         p_short = p_short * mask_short
@@ -99,11 +100,10 @@ class SensorModel:
         # axs[1, 1].plot(z_samples, p_rand)
         # axs[1, 1].title.set_text("Rand")
         # axs[2, 0].plot(z_samples, p_hit + p_short + p_rand + p_max)
+        # axs[2, 0].title.set_text("Probability Distribution")
         # axs[2, 1].plot(z_samples, self._z_hit * p_hit + self._z_short * p_short + self._z_rand * p_rand + self._z_max * p_max)
-        # print(self._z_hit * p_hit)
-        # print(self._z_short * p_short)
-        # print(self._z_rand * p_rand)
-        # print(self._z_max * p_max)
+        # axs[2, 1].title.set_text("Weighted Prob. Distribution")
+
         return self._z_hit * p_hit + self._z_short * p_short + self._z_rand * p_rand + self._z_max * p_max
 
     def __learn_intrinsic_parameters(self, prob, z_star, z_samples):
@@ -155,14 +155,10 @@ class SensorModel:
             angles_y = np.sin(theta + angle)
             x_s = x_l + d_mat * angles_x[:, None]
             y_s = y_l + d_mat * angles_y[:, None]
-            # print(x_s.shape)
-            # print(y_s)
 
             # * Clipping distances if beyond map
             x_s = np.clip(x_s, 0, self.map_x)
             y_s = np.clip(y_s, 0, self.map_y)
-            # print("XS clipped")
-            # print(x_s)
 
             # * Getting indexes from distances (0 - 799 that's why -1)
             x_s_idx = np.round(x_s / self.res - 1).astype(int)
@@ -189,7 +185,7 @@ class SensorModel:
 
         return z_star
 
-    def beam_range_finder_model(self, z_t1, x_t1, i):
+    def beam_range_finder_model(self, z_t1, x_t1, odometry_laser):
         """
         param[in] z_t1_arr : laser range readings [array of 180 values] at time t
         param[in] x_t1 : particle state belief [x, y, theta] at time t [world_frame] [M particles x 3]
@@ -201,19 +197,19 @@ class SensorModel:
         prob_zt1 = np.ones((x_t1.shape[0], 1))
         M = x_t1.shape[0]
         for p in range(M):
-            # print(f"\nParticle {p}\n")
+            # delta = np.abs(z_star[p] - z_samples)
+            # if np.all(delta < 10):
+            # print(z_star[p])
+            # print(z_samples)
+            # print(delta)
+            # print("DELTA CLOSE! - ", p)
             prob_dist = self.__get_prob(z_star[p], z_samples)
-            # print("PROB")
-            # print(prob_dist)
+
             # z_params = self.__learn_intrinsic_parameters(prob_dist, z_star[p], z_samples)
             # z_params = self._z_params
             # prob_total = z_params @ prob_dist
-            # print(prob_dist)
-            temp = np.where(prob_dist > 0, np.log(prob_dist), 0)
-            # prob_zt1[p] = np.prod(prob_dist)
 
-            prob_zt1[p] = np.sum(prob_dist)
-            # prob_zt1[p] = self.n_beams / np.abs(prob_zt1[p])
-        # print(prob_zt1)
+            prob_zt1[p] = np.sum(np.where(prob_dist != 0.0, np.log(prob_dist), 0.0))
+            prob_zt1[p] = self.n_beams / np.abs(prob_zt1[p])
 
         return prob_zt1, z_star

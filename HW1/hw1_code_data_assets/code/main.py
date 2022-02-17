@@ -21,7 +21,7 @@ import matplotlib
 from tqdm import tqdm
 
 # matplotlib.use("TkAgg")
-# np.random.seed(11)
+np.random.seed(15)
 
 
 def visualize_map(occupancy_map):
@@ -37,7 +37,7 @@ def visualize_timestep(X_bar, tstep, output_path):
     x_locs = X_bar[:, 0] / 10.0
     y_locs = X_bar[:, 1] / 10.0
     scat = plt.scatter(x_locs, y_locs, c="r", marker=".")
-    # plt.savefig("{}/{:04d}.png".format(output_path, tstep))
+    plt.savefig("{}/{:04d}.png".format(output_path, tstep))
     plt.pause(0.00001)
     scat.remove()
 
@@ -67,12 +67,12 @@ def init_particles_freespace(num_particles, occupancy_map):
     x0_vals = []
     y0_vals = []
     while len(x0_vals) < num_particles:
-        y = np.random.uniform(0, 7000, (num_particles, 1))
-        x = np.random.uniform(3000, 7000, (num_particles, 1))
+        x = np.random.uniform(3000, 7500, (num_particles, 1))
+        y = np.random.uniform(0, 7500, (num_particles, 1))
         y_idx = (y / 10.0).astype(int)
         x_idx = (x / 10.0).astype(int)
         for i in range(num_particles):
-            if np.abs(occupancy_map[y_idx[i], x_idx[i]]) == 0 and np.abs(occupancy_map[y_idx[i], x_idx[i]]) <= 0.35:
+            if np.abs(occupancy_map[y_idx[i], x_idx[i]]) == 0:
                 if len(x0_vals) < num_particles:
                     x0_vals.append(x[i])
                     y0_vals.append(y[i])
@@ -114,9 +114,9 @@ if __name__ == "__main__":
     # * Initialize Parameters
     parser = argparse.ArgumentParser()
     parser.add_argument("--path_to_map", default="hw1_code_data_assets/data/map/wean.dat")
-    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata1.log")
+    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata4.log")
     parser.add_argument("--output", default="hw1_code_data_assets/results")
-    parser.add_argument("--num_particles", default=1000, type=int)
+    parser.add_argument("--num_particles", default=500, type=int)
     parser.add_argument("--visualize", action="store_true")
     args = parser.parse_args()
 
@@ -124,7 +124,11 @@ if __name__ == "__main__":
 
     src_path_map = args.path_to_map
     src_path_log = args.path_to_log
-    os.makedirs(args.output, exist_ok=True)
+    logname = src_path_log.split("/")[-1]
+    logname = logname.split(".")[0]
+    print("Logfile = ", logname)
+    save_path = args.output + "-" + logname
+    os.makedirs(save_path, exist_ok=True)
 
     # * Object Definitions
     map_obj = MapReader(src_path_map)
@@ -138,23 +142,20 @@ if __name__ == "__main__":
 
     # * Particles and Initialization
     num_particles = args.num_particles
-
     if num_particles == 1:
-        X_bar = np.array([[4000, 4000, np.pi / 2, 1], [4000, 4000, np.pi / 2, 1]])
+        X_bar = np.array([[4620, 2180, 0, 1.0], [4620, 2180, 0, 1.0]])
     else:
         # X_bar = init_particles_random(num_particles)
         X_bar = init_particles_freespace(num_particles, occupancy_map)
 
     visualize_map(occupancy_map)
-    visualize_timestep(X_bar, 1000000, args.output)
+    # visualize_timestep(X_bar, 1000000, args.output)
 
     # * Monte Carlo Localization Algorithm : Main Loop
     first_time_idx = True
+    rand_idx = np.random.randint(0, num_particles)
+    start = time.time()
     for time_idx, line in enumerate(logfile):
-        rand_idx = np.random.randint(0, num_particles)
-
-        # if time_idx > 50:
-        # continue
 
         meas_type = line[0]
         meas_vals = np.fromstring(line[2:], dtype=np.float64, sep=" ")
@@ -164,7 +165,7 @@ if __name__ == "__main__":
         time_stamp = meas_vals[-1]
 
         # ignore pure odometry measurements for (faster debugging)
-        # if ((time_stamp <= 0.0) | (meas_type == "O")):
+        # if (time_stamp <= 0.0) | (meas_type == "O"):
         #     continue
 
         if meas_type == "L":
@@ -189,23 +190,23 @@ if __name__ == "__main__":
         # * Sensor Model
         if meas_type == "L":
             z_t = ranges
-            w_t, z_star = sensor_model.beam_range_finder_model(z_t, x_t1, time_idx)
+            w_t, z_star = sensor_model.beam_range_finder_model(z_t, x_t1, odometry_laser)
             X_bar_new = np.hstack((x_t1, w_t))
 
             # z_values = z_star[rand_idx]
             # x_val = X_bar[rand_idx, 0]
             # y_val = X_bar[rand_idx, 1]
             # theta_val = X_bar[rand_idx, 2]
-            # # print(z_values, x_val, y_val, theta_val)
-            # angles = np.arange(np.pi / 2, -np.pi / 2, -np.pi / 30)
+            # print(z_values, x_val, y_val, theta_val)
+            # angles = np.arange(np.pi / 2, -np.pi / 2, -np.pi / 36)
             # for i, a in enumerate(angles):
             #     p1 = [(x_val) / 10, (x_val + z_values[i] * np.cos(theta_val + a)) / 10]
             #     p2 = [(y_val) / 10, (y_val + z_values[i] * np.sin(theta_val + a)) / 10]
             #     (rays,) = plt.plot(p1, p2, "b", lw=0.5)
             # rays.remove()
-        else:
-            old_w_t = np.array(X_bar[:, 3])
-            X_bar_new = np.hstack((x_t1, old_w_t[:, None]))
+        # else:
+        #     old_w_t = np.array(X_bar[:, 3])
+        #     X_bar_new = np.hstack((x_t1, old_w_t[:, None]))
 
         X_bar = X_bar_new
         u_t0 = u_t1
@@ -213,6 +214,8 @@ if __name__ == "__main__":
         # * Resampling
         if meas_type == "L":
             X_bar = resampler.low_variance_sampler(X_bar)
-            # print(X_bar[:, 3])
 
-        visualize_timestep(X_bar, time_idx, args.output)
+        visualize_timestep(X_bar, time_idx, save_path)
+
+end = time.time()
+print(f"Time taken = {(end - start) / 60} mins\n")
