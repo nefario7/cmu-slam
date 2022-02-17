@@ -32,9 +32,8 @@ class MotionModel:
         param[in] x_t0 : particle state belief [x, y, theta] at time (t-1) [world_frame]
         param[out] x_t1 : particle state belief [x, y, theta] at time t [world_frame]
         """
-        """
-        TODO : Update the function for vectorized 2D inputs
-        """
+
+        # * When no change in pose, return same state
         if (u_t1[0] == u_t0[0]) and (u_t1[1] == u_t0[1]) and (u_t1[2] == u_t0[2]):
             x_t1 = x_t0
             return x_t1
@@ -69,8 +68,10 @@ class MotionModel:
     def prob_nd(self, a, bb):
         return np.power(2 * np.pi * bb, -0.5) * np.exp(-(a**2) / (2 * bb))
 
+    # * Random value from Normal Distribution
     def sample_nd(self, bb):
         return np.random.normal(loc=0, scale=np.sqrt(bb))
 
+    # * Function to wrap heading angle between [-pi, pi]
     def wrap_to_pi(self, angle):
         return angle - 2 * np.pi * np.floor((angle + np.pi) / (2 * np.pi))

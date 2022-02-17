@@ -60,18 +60,19 @@ def init_particles_random(num_particles):
 
 def init_particles_freespace(num_particles, occupancy_map):
 
-    # initialize [x, y, theta] positions in world_frame for all particles
     """
     This version converges faster than init_particles_random
     """
     x0_vals = []
     y0_vals = []
+    # * Iterating over till number of samples = number of particles needed
     while len(x0_vals) < num_particles:
         x = np.random.uniform(3000, 7500, (num_particles, 1))
         y = np.random.uniform(0, 7500, (num_particles, 1))
         y_idx = (y / 10.0).astype(int)
         x_idx = (x / 10.0).astype(int)
         for i in range(num_particles):
+            # * Check if the location in occupancy map is free (P = 0)
             if np.abs(occupancy_map[y_idx[i], x_idx[i]]) == 0:
                 if len(x0_vals) < num_particles:
                     x0_vals.append(x[i])
@@ -114,7 +115,7 @@ if __name__ == "__main__":
     # * Initialize Parameters
     parser = argparse.ArgumentParser()
     parser.add_argument("--path_to_map", default="hw1_code_data_assets/data/map/wean.dat")
-    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata4.log")
+    parser.add_argument("--path_to_log", default="hw1_code_data_assets/data/log/robotdata2.log")
     parser.add_argument("--output", default="hw1_code_data_assets/results")
     parser.add_argument("--num_particles", default=500, type=int)
     parser.add_argument("--visualize", action="store_true")
@@ -122,6 +123,7 @@ if __name__ == "__main__":
 
     os.chdir(r"D:\CMU\Academics\SLAM\Homeworks\HW1")
 
+    # * Create folder to store frames
     src_path_map = args.path_to_map
     src_path_log = args.path_to_log
     logname = src_path_log.split("/")[-1]
@@ -142,18 +144,17 @@ if __name__ == "__main__":
 
     # * Particles and Initialization
     num_particles = args.num_particles
-    if num_particles == 1:
-        X_bar = np.array([[4620, 2180, 0, 1.0], [4620, 2180, 0, 1.0]])
-    else:
-        # X_bar = init_particles_random(num_particles)
-        X_bar = init_particles_freespace(num_particles, occupancy_map)
+    # X_bar = init_particles_random(num_particles)
+    X_bar = init_particles_freespace(num_particles, occupancy_map)
 
+    # * Visualize MAP
     visualize_map(occupancy_map)
-    # visualize_timestep(X_bar, 1000000, args.output)
 
-    # * Monte Carlo Localization Algorithm : Main Loop
+    # * Monte Carlo Localization Algorithm
     first_time_idx = True
-    rand_idx = np.random.randint(0, num_particles)
+
+    rand_idx = np.random.randint(0, num_particles)  # Random particle index for plotting rays
+
     start = time.time()
     for time_idx, line in enumerate(logfile):
 
@@ -193,6 +194,7 @@ if __name__ == "__main__":
             w_t, z_star = sensor_model.beam_range_finder_model(z_t, x_t1, odometry_laser)
             X_bar_new = np.hstack((x_t1, w_t))
 
+            # * Plot the rays for a random particle
             # z_values = z_star[rand_idx]
             # x_val = X_bar[rand_idx, 0]
             # y_val = X_bar[rand_idx, 1]
@@ -204,9 +206,9 @@ if __name__ == "__main__":
             #     p2 = [(y_val) / 10, (y_val + z_values[i] * np.sin(theta_val + a)) / 10]
             #     (rays,) = plt.plot(p1, p2, "b", lw=0.5)
             # rays.remove()
-        # else:
-        #     old_w_t = np.array(X_bar[:, 3])
-        #     X_bar_new = np.hstack((x_t1, old_w_t[:, None]))
+        else:
+            old_w_t = np.array(X_bar[:, 3])
+            X_bar_new = np.hstack((x_t1, old_w_t[:, None]))
 
         X_bar = X_bar_new
         u_t0 = u_t1

@@ -34,9 +34,6 @@ class Resampling:
         param[in] X_bar : [num_particles x 4] sized array containing [x, y, theta, wt] values for all particles
         param[out] X_bar_resampled : [num_particles x 4] sized array containing [x, y, theta, wt] values for resampled set of particles
         """
-        """
-        TODO : Add your code here
-        """
 
         X_bar_resampled = list()
         M = X_bar.shape[0]
@@ -44,9 +41,12 @@ class Resampling:
         # * Normalization
         X_bar[:, 3] = X_bar[:, 3] / np.sum(X_bar[:, 3])
 
+        # * Generate random uniform probability
         r = np.random.uniform(0, 1.0 / M)
         c = X_bar[0, 3]
         i = 0
+
+        # * Resample particles based on weights
         for m in range(1, M + 1):
             u = r + (m - 1) / M
             while u > c:

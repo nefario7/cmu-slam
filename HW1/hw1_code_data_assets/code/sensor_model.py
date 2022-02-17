@@ -10,7 +10,7 @@ import time
 from matplotlib import pyplot as plt
 from scipy.stats import norm
 
-# from map_reader import MapReader
+from map_reader import MapReader
 from tqdm import tqdm
 
 
@@ -27,7 +27,7 @@ class SensorModel:
         """
         self._z_hit = 150
         self._z_short = 2
-        self._z_max = 0.5  # 0.5
+        self._z_max = 0.5
         self._z_rand = 100
         self._z_params = np.array([self._z_hit, self._z_short, self._z_max, self._z_rand])
 
@@ -54,10 +54,12 @@ class SensorModel:
         self.map_y = map_obj.get_map_size_y()
         self.res = map_obj._resolution
 
-        # Robot Intrinsic
+        # Robot Intrinsic Parameters
         self.gap = 25  # cm
 
     def __get_prob(self, z_star, z_samples):
+        # * Function to return the summed probabilites with assigned weights
+        # ? Samples for generating probability distribution (Testing)
         # z_samples = np.linspace(0, self._max_range, 1000)
         # z_star = np.ones_like(z_samples) * 500
 
@@ -90,6 +92,7 @@ class SensorModel:
         p_rand = p_rand * mask_rand
         # print(p_rand)
 
+        # ? Plots of probability distributions (Testing)
         # fig_p, axs = plt.subplots(3, 2, figsize=(10, 10))
         # axs[0, 0].plot(z_samples, p_hit)
         # axs[0, 0].title.set_text("Hit")
@@ -107,7 +110,7 @@ class SensorModel:
         return self._z_hit * p_hit + self._z_short * p_short + self._z_rand * p_rand + self._z_max * p_max
 
     def __learn_intrinsic_parameters(self, prob, z_star, z_samples):
-        # ? Whether to use subsampled - z_samples / full - z_t1
+        # * Implementation of learn intrinsic parameters algorithm from the beam range finder model
         norm = np.sum(prob, axis=0)
         epsilon = 0.0000001
         norm = np.power(norm + epsilon, -1)
@@ -126,9 +129,11 @@ class SensorModel:
         return np.array([self._z_hit, self._z_short, self._z_max, self._z_rand])
 
     def __wrap_to_pi(self, angle):
+        # * Function to wrap angles between [-pi, pi]
         return angle - 2 * np.pi * np.floor((angle + np.pi) / (2 * np.pi))
 
     def __ray_cast(self, x_t1):
+        # * Function to generate predicted measurements from the provided map (z*)
         m = x_t1.shape[0]
         z_star = np.zeros((m, self.n_beams))
 
@@ -140,14 +145,19 @@ class SensorModel:
         x_l = x + self.gap * np.cos(theta)
         y_l = y + self.gap * np.sin(theta)
 
+        # * Distance vector of 'K' steps along a particular ray
         d_arr = np.arange(1, self.max_laser_range / self.step_size + 1) * self.step_size
+
+        # * Distance Matrix of size (M x K)
         d_mat = np.tile(d_arr, (m, 1))
 
+        # * Extending the x and y positions of 'M' particles to (M x K)
         x_l = np.tile(x_l, (d_arr.shape[0], 1)).T
         y_l = np.tile(y_l, (d_arr.shape[0], 1)).T
 
+        # * Angles from pi/2 to -pi/2 in angle steps
         angles = np.arange(np.pi / 2, -np.pi / 2, -np.pi / self.n_beams)
-        # angles = np.arange(0, np.pi, np.pi / self.n_beams)
+
         for ray, angle in enumerate(angles):
             # print(f"\n___________________ Beam - {ray} @ {angle * 180 / np.pi} ___________________\n")
             # * Projecting steps on X and Y axes
@@ -197,14 +207,7 @@ class SensorModel:
         prob_zt1 = np.ones((x_t1.shape[0], 1))
         M = x_t1.shape[0]
         for p in range(M):
-            # delta = np.abs(z_star[p] - z_samples)
-            # if np.all(delta < 10):
-            # print(z_star[p])
-            # print(z_samples)
-            # print(delta)
-            # print("DELTA CLOSE! - ", p)
             prob_dist = self.__get_prob(z_star[p], z_samples)
-
             # z_params = self.__learn_intrinsic_parameters(prob_dist, z_star[p], z_samples)
             # z_params = self._z_params
             # prob_total = z_params @ prob_dist
