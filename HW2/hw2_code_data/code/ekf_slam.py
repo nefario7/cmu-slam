@@ -1,12 +1,13 @@
-'''
+"""
     Initially written by Ming Hsiao in MATLAB
     Adapted to Python by Akash Sharma (akashsharma@cmu.edu), 2020
     Updated by Wei Dong (weidong@andrew.cmu.edu), 2021
-'''
+"""
 
 import numpy as np
 import re
 import matplotlib.pyplot as plt
+
 np.set_printoptions(suppress=True, threshold=np.inf, linewidth=np.inf)
 
 
@@ -22,14 +23,11 @@ def draw_cov_ellipse(mu, cov, color):
     a, b = s[0], s[1]
     vx, vy = U[0, 0], U[0, 1]
     theta = np.arctan2(vy, vx)
-    R = np.array([[np.cos(theta), -np.sin(theta)],
-                  [np.sin(theta), np.cos(theta)]])
+    R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
     phi = np.arange(0, 2 * np.pi, np.pi / 50)
     rot = []
     for i in range(100):
-        rect = (np.array(
-            [3 * np.sqrt(a) * np.cos(phi[i]),
-             3 * np.sqrt(b) * np.sin(phi[i])]))[:, None]
+        rect = (np.array([3 * np.sqrt(a) * np.cos(phi[i]), 3 * np.sqrt(b) * np.sin(phi[i])]))[:, None]
         rot.append(R @ rect + mu)
 
     rot = np.asarray(rot)
@@ -37,19 +35,19 @@ def draw_cov_ellipse(mu, cov, color):
 
 
 def draw_traj_and_pred(X, P):
-    """ Draw trajectory for Predicted state and Covariance
+    """Draw trajectory for Predicted state and Covariance
 
     :X: Prediction vector
     :P: Prediction Covariance matrix
     :returns: None
 
     """
-    draw_cov_ellipse(X[0:2], P[0:2, 0:2], 'm')
+    draw_cov_ellipse(X[0:2], P[0:2, 0:2], "m")
     plt.draw()
-    plt.waitforbuttonpress(0)
+    # plt.waitforbuttonpress(0)
 
 
-def draw_traj_and_map(X, last_X, P, t):
+def draw_traj_and_map(X, last_X, P, t, test_name):
     """Draw Trajectory and map
 
     :X: Current state
@@ -60,22 +58,19 @@ def draw_traj_and_map(X, last_X, P, t):
 
     """
     plt.ion()
-    draw_cov_ellipse(X[0:2], P[0:2, 0:2], 'b')
-    plt.plot([last_X[0], X[0]], [last_X[1], X[1]], c='b', linewidth=0.75)
-    plt.plot(X[0], X[1], '*b')
+    draw_cov_ellipse(X[0:2], P[0:2, 0:2], "b")
+    plt.plot([last_X[0], X[0]], [last_X[1], X[1]], c="b", linewidth=0.75)
+    plt.plot(X[0], X[1], "*b")
 
     if t == 0:
         for k in range(6):
-            draw_cov_ellipse(
-                X[3 + k * 2:3 + k * 2 + 2], P[3 + k * 2:3 + 2 * k + 2,
-                                              3 + 2 * k:3 + 2 * k + 2], 'r')
+            draw_cov_ellipse(X[3 + k * 2 : 3 + k * 2 + 2], P[3 + k * 2 : 3 + 2 * k + 2, 3 + 2 * k : 3 + 2 * k + 2], "r")
     else:
         for k in range(6):
-            draw_cov_ellipse(
-                X[3 + k * 2:3 + k * 2 + 2], P[3 + 2 * k:3 + 2 * k + 2,
-                                              3 + 2 * k:3 + 2 * k + 2], 'g')
+            draw_cov_ellipse(X[3 + k * 2 : 3 + k * 2 + 2], P[3 + 2 * k : 3 + 2 * k + 2, 3 + 2 * k : 3 + 2 * k + 2], "g")
 
     plt.draw()
+    plt.savefig("../plots/Trajectory_" + test_name + ".png")
     plt.waitforbuttonpress(0)
 
 
@@ -86,11 +81,12 @@ def warp2pi(angle_rad):
     \param angle_rad Input angle in radius
     \return angle_rad_warped Warped angle to [-\pi, \pi].
     """
-    return angle_rad
+    angle_rad_warped = angle_rad - 2 * np.pi * np.floor((angle_rad + np.pi) / (2 * np.pi))
+    return angle_rad_warped
 
 
 def init_landmarks(init_measure, init_measure_cov, init_pose, init_pose_cov):
-    '''
+    """
     TODO: initialize landmarks given the initial poses and measurements with their covariances
     \param init_measure Initial measurements in the form of (beta0, l0, beta1, l1, ...).
     \param init_measure_cov Initial covariance matrix of shape (2, 2) per landmark given parameters.
@@ -100,18 +96,36 @@ def init_landmarks(init_measure, init_measure_cov, init_pose, init_pose_cov):
     \return k Number of landmarks.
     \return landmarks Numpy array of shape (2k, 1) for the state.
     \return landmarks_cov Numpy array of shape (2k, 2k) for the uncertainty.
-    '''
+    """
 
     k = init_measure.shape[0] // 2
 
     landmark = np.zeros((2 * k, 1))
     landmark_cov = np.zeros((2 * k, 2 * k))
 
+    x, y, theta = init_pose[0], init_pose[1], init_pose[2]
+    beta = init_measure[::2]
+    r = init_measure[1::2]
+
+    for i in range(k):
+
+        p = 2 * i
+        b = beta[i, 0]
+        landmark[p] = x + r[i] * np.cos(warp2pi(theta + b))
+        landmark[p + 1] = y + r[i] * np.sin(warp2pi(theta + b))
+
+        landmark_cov[p : p + 2, p : p + 2] = init_measure_cov
+
+        # H_init = np.array([[1, 0, -r[i] * np.sin(b)], [0, 1, r[i] * np.cos(b)]], dtype=object)
+        # Q_init = np.array([[-r[i] * np.sin(b), np.cos(b)], [r[i] * np.cos(b), np.sin(b)]], dtype=object)
+        # landmark_cov[p : p + 2, p : p + 2] = H_init @ init_pose_cov @ H_init.T + Q_init @ init_measure_cov @ Q_init.T
+    # print(landmark_cov)
+
     return k, landmark, landmark_cov
 
 
 def predict(X, P, control, control_cov, k):
-    '''
+    """
     TODO: predict step in EKF SLAM with derived Jacobians.
     \param X State vector of shape (3 + 2k, 1) stacking pose and landmarks.
     \param P Covariance matrix of shape (3 + 2k, 3 + 2k) for X.
@@ -121,13 +135,43 @@ def predict(X, P, control, control_cov, k):
 
     \return X_pre Predicted X state of shape (3 + 2k, 1).
     \return P_pre Predicted P covariance of shape (3 + 2k, 3 + 2k).
-    '''
+    """
+    X_pre = np.zeros_like(X)
+    P_pre = np.zeros_like(P)
 
-    return X, P
+    d = control[0]
+    alpha = control[1]
+    theta = X[2]
+
+    F = np.hstack((np.identity(3), np.zeros((3, 2 * k))))  # Mapping to higher dimension
+
+    # * Predicted State - g(u, (x, y, theta)(t-1))
+    g = np.array([d * np.cos(theta), d * np.sin(X[2]), alpha])  # Non-linear function
+
+    X_pre = X + F.T @ g
+    X_pre[2] = warp2pi(X_pre[2])
+
+    # * Jacobian - G
+    J = np.zeros((3, 3))
+    J[0, 2] = -d * np.sin(theta)
+    J[1, 2] = d * np.cos(theta)
+    G = np.identity(3 + 2 * k) + F.T @ J @ F
+
+    control_cov_large = np.zeros_like(P)
+    control_cov_large[:3, :3] = control_cov
+
+    # * Pose Prediction
+    # P_pre = G @ P @ G.T + control_cov_large  # ? Simple addition
+    P_pre = G @ P @ G.T + F.T @ control_cov @ F  # ? Extra computation maybe
+
+    # print("X_Pre = \n", X_pre)
+    # print("P_Pre = \n", P_pre[:3, :3])
+    # print(P[3:, 3:])
+    return X_pre, P_pre
 
 
 def update(X_pre, P_pre, measure, measure_cov, k):
-    '''
+    """
     TODO: update step in EKF SLAM with derived Jacobians.
     \param X_pre Predicted state vector of shape (3 + 2k, 1) from the predict step.
     \param P_pre Predicted covariance matrix of shape (3 + 2k, 3 + 2k) from the predict step.
@@ -137,13 +181,69 @@ def update(X_pre, P_pre, measure, measure_cov, k):
 
     \return X Updated X state of shape (3 + 2k, 1).
     \return P Updated P covariance of shape (3 + 2k, 3 + 2k).
-    '''
+    """
+    beta = measure[::2]
+    r = measure[1::2]
+    x, y, theta = X_pre[0], X_pre[1], X_pre[2]
 
+    # print("Pose : ", x, y, theta)
+    # print("Range : ", r)
+    # print("Bearing : ", beta)
+
+    # * Landmarks in Global Frame
+    landmark = np.zeros((2 * k, 1))
+    for i in range(k):
+        p = 2 * i
+        landmark[p] = x + r[i] * np.cos(theta + beta[i])
+        landmark[p + 1] = y + r[i] * np.sin(theta + beta[i])
+        # print("Landmark", i, landmark[p], landmark[p + 1])
+    delta_x = landmark[::2] - x  # k x 1 Array
+    delta_y = landmark[1::2] - y  # k x 1 Array
+    # print("Deltas : ", delta_x, delta_y)
+
+    # * Updating Expected Pose and Covariance based on Landmarks
+    for i in range(k):
+        # print("\nLandmark ", i)
+        dx, dy = delta_x[i, 0], delta_y[i, 0]
+
+        # * Predicted and True Masurements for Landmark [i]
+        measure_pre = np.zeros((2, 1))
+        measure_pre[0] = np.sqrt(dx**2 + dy**2)
+        measure_pre[1] = warp2pi(np.arctan2(dy, dx) - theta)  #! warp2pi?
+
+        measure_tru = np.zeros((2, 1))
+        p = 2 * i
+        measure_tru[0] = measure[p]
+        measure_tru[1] = measure[p + 1]
+        measure_tru = np.flip(measure_tru)
+
+        # print("Measure Pre : ", measure_pre)
+        # print("Measure Tru : ", measure_tru)
+
+        # * Jacobians
+        D = np.sqrt(dx**2 + dy**2)
+        H_p = np.array([[-dx / D, -dy / D, 0], [dy / D**2, -dx / D**2, -1]])  # 2 x 3
+        H_l = np.array([[dx / D, dy / D], [-dy / D**2, dx / D**2]])  # 2 x 2
+        H_low = np.hstack((H_p, H_l))  # 2 x 5
+        F = np.zeros((H_low.shape[1], 3 + 2 * k))
+
+        # * Mapping Matrix
+        F[:3, :3] = np.identity(3)
+        F[3:, 2 * i + 3 : 2 * i + 5] = np.identity(2)
+        H = H_low @ F
+
+        # * Kalman Gain
+        K = P_pre @ H.T @ np.linalg.inv(H @ P_pre @ H.T + measure_cov)
+        X_pre = K @ (measure_tru - measure_pre) + X_pre
+        P_pre = (np.identity(3 + 2 * k) - K @ H) @ P_pre
+
+    # print("X_pre = \n", X_pre)
+    # print("P_pre = \n", P_pre)
     return X_pre, P_pre
 
 
-def evaluate(X, P, k):
-    '''
+def evaluate(X, P, k, test_name):
+    """
     TODO: evaluate the performance of EKF SLAM.
     1) Plot the results.
     2) Compute and print the Euclidean and Mahalanobis distance given X, P, and the ground truth (provided in the function).
@@ -151,21 +251,44 @@ def evaluate(X, P, k):
     \param P Covariance matrix of shape (3 + 2k, 3 + 2k) for X.
 
     \return None
-    '''
+    """
+    plt.waitforbuttonpress(0)
+    print("Evaluation")
+    # Beta, Range
     l_true = np.array([3, 6, 3, 12, 7, 8, 7, 14, 11, 6, 11, 12], dtype=float)
     plt.scatter(l_true[0::2], l_true[1::2])
     plt.draw()
+    plt.savefig("../plots/Evaluation_" + test_name + ".png", dpi=1200)
     plt.waitforbuttonpress(0)
 
+    for i in range(k):
+        print(f"Landmark {i} :")
+        idx = 2 * i
+        pred = X[idx + 3 : idx + 5, 0]
+        true = l_true[idx : idx + 2]
+        diff = pred - true
+        # diff = np.flip(diff)
+        cova = P[idx + 3 : idx + 5, idx + 3 : idx + 5]
 
-def main():
-    # TEST: Setup uncertainty parameters
-    sig_x = 0.25;
-    sig_y = 0.1;
-    sig_alpha = 0.1;
-    sig_beta = 0.01;
-    sig_r = 0.08;
+        maha = diff.T @ np.linalg.inv(cova) @ diff
+        eucl = np.sqrt(diff @ diff.T)
 
+        print(f"\tMahalanobis Distance = {maha} \tEuclidean Distance = {eucl}")
+
+    #       Final Euclidean distances :
+    #           [0.32202495 0.59551973 0.50557384 0.74724638 0.59547208 0.77927625]
+    #       Final Mahalanobis distances :
+    #           [24.232683731817676, 22.183935643004066, 49.35727822321264, 56.54759400960451, 35.43844970418464, 75.07098468312927]
+
+    return None
+
+
+def main(params, test_name=""):
+    sig_x = params["sig_x"]
+    sig_y = params["sig_y"]
+    sig_alpha = params["sig_alpha"]
+    sig_beta = params["sig_beta"]
+    sig_r = params["sig_r"]
 
     # Generate variance from standard deviation
     sig_x2 = sig_x**2
@@ -177,7 +300,7 @@ def main():
     # Open data file and read the initial measurements
     data_file = open("../data/data.txt")
     line = data_file.readline()
-    fields = re.split('[\t ]', line)[:-1]
+    fields = re.split("[\t ]", line)[:-1]
     arr = np.array([float(field) for field in fields])
     measure = np.expand_dims(arr, axis=1)
     t = 1
@@ -192,27 +315,25 @@ def main():
 
     ##########
     # TODO: initialize landmarks
-    k, landmark, landmark_cov = init_landmarks(measure, measure_cov, pose,
-                                               pose_cov)
+    k, landmark, landmark_cov = init_landmarks(measure, measure_cov, pose, pose_cov)
 
     # Setup state vector X by stacking pose and landmark states
     # Setup covariance matrix P by expanding pose and landmark covariances
     X = np.vstack((pose, landmark))
-    P = np.block([[pose_cov, np.zeros((3, 2 * k))],
-                  [np.zeros((2 * k, 3)), landmark_cov]])
+    P = np.block([[pose_cov, np.zeros((3, 2 * k))], [np.zeros((2 * k, 3)), landmark_cov]])
 
     # Plot initial state and covariance
     last_X = X
-    draw_traj_and_map(X, last_X, P, 0)
+    draw_traj_and_map(X, last_X, P, 0, test_name)
 
     # Core loop: sequentially process controls and measurements
     for line in data_file:
-        fields = re.split('[\t ]', line)[:-1]
+        fields = re.split("[\t ]", line)[:-1]
         arr = np.array([float(field) for field in fields])
 
         # Control
         if arr.shape[0] == 2:
-            print(f'{t}: Predict step')
+            print(f"{t}: Predict step")
             d, alpha = arr[0], arr[1]
             control = np.array([[d], [alpha]])
 
@@ -224,20 +345,43 @@ def main():
 
         # Measurement
         else:
-            print(f'{t}: Update step')
+            print(f"{t}: Update step")
             measure = np.expand_dims(arr, axis=1)
 
             ##########
             # TODO: update step in EKF SLAM
             X, P = update(X_pre, P_pre, measure, measure_cov, k)
 
-            draw_traj_and_map(X, last_X, P, t)
+            draw_traj_and_map(X, last_X, P, t, test_name)
             last_X = X
             t += 1
 
     # EVAL: Plot ground truth landmarks and analyze distances
-    evaluate(X, P, k)
+    evaluate(X, P, k, test_name)
 
 
 if __name__ == "__main__":
-    main()
+    # TEST: Setup uncertainty parameters
+    # * Reference Parameters\
+    params = {
+        "sig_x": 0.25,
+        "sig_y": 0.1,
+        "sig_alpha": 0.1,
+        "sig_beta": 0.01,
+        "sig_r": 0.08,
+    }
+    # params = {
+    #     "sig_x": 0.025,
+    #     "sig_y": 0.01,
+    #     "sig_alpha": 0.05,
+    #     "sig_beta": 0.015,
+    #     "sig_r": 0.15,
+    # }
+
+    main(params)
+
+    # Ablations
+    # for sig, val in {"sig_x": 2.5, "sig_y": 1, "sig_alpha": 1, "sig_beta": 0.1, "sig_r": 0.8}.items():
+    #     print("-" * 20, sig, "-" * 20)
+    #     params[sig] = val
+    #     main(params, sig)
