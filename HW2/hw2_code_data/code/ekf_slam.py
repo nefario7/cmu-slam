@@ -7,6 +7,9 @@
 import numpy as np
 import re
 import matplotlib.pyplot as plt
+import os
+
+os.chdir(r"D:\CMU\Academics\SLAM\Homeworks\HW2\hw2_code_data\code")
 
 np.set_printoptions(suppress=True, threshold=np.inf, linewidth=np.inf)
 
@@ -45,6 +48,7 @@ def draw_traj_and_pred(X, P):
     draw_cov_ellipse(X[0:2], P[0:2, 0:2], "m")
     plt.draw()
     # plt.waitforbuttonpress(0)
+    plt.pause(0.5)
 
 
 def draw_traj_and_map(X, last_X, P, t, test_name):
@@ -71,7 +75,8 @@ def draw_traj_and_map(X, last_X, P, t, test_name):
 
     plt.draw()
     plt.savefig("../plots/Trajectory_" + test_name + ".png")
-    plt.waitforbuttonpress(0)
+    # plt.waitforbuttonpress(0)
+    plt.pause(0.5)
 
 
 def warp2pi(angle_rad):
@@ -81,8 +86,11 @@ def warp2pi(angle_rad):
     \param angle_rad Input angle in radius
     \return angle_rad_warped Warped angle to [-\pi, \pi].
     """
-    angle_rad_warped = angle_rad - 2 * np.pi * np.floor((angle_rad + np.pi) / (2 * np.pi))
-    return angle_rad_warped
+    if angle_rad > np.pi or angle_rad < -np.pi:
+        angle_rad_warped = angle_rad - 2 * np.pi * np.floor((angle_rad + np.pi) / (2 * np.pi))
+        return angle_rad_warped
+    else:
+        return angle_rad
 
 
 def init_landmarks(init_measure, init_measure_cov, init_pose, init_pose_cov):
@@ -103,22 +111,24 @@ def init_landmarks(init_measure, init_measure_cov, init_pose, init_pose_cov):
     landmark = np.zeros((2 * k, 1))
     landmark_cov = np.zeros((2 * k, 2 * k))
 
-    x, y, theta = init_pose[0], init_pose[1], init_pose[2]
+    x, y, theta = init_pose[0, 0], init_pose[1, 0], init_pose[2, 0]
     beta = init_measure[::2]
     r = init_measure[1::2]
 
     for i in range(k):
-
         p = 2 * i
-        b = beta[i, 0]
+        b = warp2pi(beta[i, 0] + theta)
         landmark[p] = x + r[i] * np.cos(warp2pi(theta + b))
         landmark[p + 1] = y + r[i] * np.sin(warp2pi(theta + b))
 
-        landmark_cov[p : p + 2, p : p + 2] = init_measure_cov
+        # * Zero Cross covariances b/w bearing and range (Initialization Type 1)
+        # landmark_cov[p : p + 2, p : p + 2] = init_measure_cov
 
-        # H_init = np.array([[1, 0, -r[i] * np.sin(b)], [0, 1, r[i] * np.cos(b)]], dtype=object)
-        # Q_init = np.array([[-r[i] * np.sin(b), np.cos(b)], [r[i] * np.cos(b), np.sin(b)]], dtype=object)
-        # landmark_cov[p : p + 2, p : p + 2] = H_init @ init_pose_cov @ H_init.T + Q_init @ init_measure_cov @ Q_init.T
+        # * Non-zero cross covariances b/w bearing and range (Initialization Type 2)
+        H_init = np.array([[1, 0, -r[i] * np.sin(b)], [0, 1, r[i] * np.cos(b)]], dtype=object)  # x, y, theta
+        Q_init = np.array([[-r[i] * np.sin(b), np.cos(b)], [r[i] * np.cos(b), np.sin(b)]], dtype=object)  # beta, r
+        landmark_cov[p : p + 2, p : p + 2] = H_init @ init_pose_cov @ H_init.T + Q_init @ init_measure_cov @ Q_init.T
+
     # print(landmark_cov)
 
     return k, landmark, landmark_cov
@@ -139,14 +149,13 @@ def predict(X, P, control, control_cov, k):
     X_pre = np.zeros_like(X)
     P_pre = np.zeros_like(P)
 
-    d = control[0]
-    alpha = control[1]
-    theta = X[2]
+    d, alpha = control[0], control[1]
+    x, y, theta = X[:3]
 
     F = np.hstack((np.identity(3), np.zeros((3, 2 * k))))  # Mapping to higher dimension
 
     # * Predicted State - g(u, (x, y, theta)(t-1))
-    g = np.array([d * np.cos(theta), d * np.sin(X[2]), alpha])  # Non-linear function
+    g = np.array([d * np.cos(theta), d * np.sin(theta), alpha])  # Non-linear function
 
     X_pre = X + F.T @ g
     X_pre[2] = warp2pi(X_pre[2])
@@ -157,12 +166,12 @@ def predict(X, P, control, control_cov, k):
     J[1, 2] = d * np.cos(theta)
     G = np.identity(3 + 2 * k) + F.T @ J @ F
 
-    control_cov_large = np.zeros_like(P)
-    control_cov_large[:3, :3] = control_cov
+    # control_cov_large = np.zeros_like(P)
+    # control_cov_large[:3, :3] = control_cov
 
-    # * Pose Prediction
-    # P_pre = G @ P @ G.T + control_cov_large  # ? Simple addition
-    P_pre = G @ P @ G.T + F.T @ control_cov @ F  # ? Extra computation maybe
+    # * Prediction
+    # P_pre = G @ P @ G.T + control_cov_large  # Simple addition
+    P_pre = G @ P @ G.T + F.T @ control_cov @ F  # Extra computation maybe
 
     # print("X_Pre = \n", X_pre)
     # print("P_Pre = \n", P_pre[:3, :3])
@@ -184,38 +193,40 @@ def update(X_pre, P_pre, measure, measure_cov, k):
     """
     beta = measure[::2]
     r = measure[1::2]
-    x, y, theta = X_pre[0], X_pre[1], X_pre[2]
 
-    # print("Pose : ", x, y, theta)
-    # print("Range : ", r)
-    # print("Bearing : ", beta)
-
-    # * Landmarks in Global Frame
-    landmark = np.zeros((2 * k, 1))
-    for i in range(k):
-        p = 2 * i
-        landmark[p] = x + r[i] * np.cos(theta + beta[i])
-        landmark[p + 1] = y + r[i] * np.sin(theta + beta[i])
-        # print("Landmark", i, landmark[p], landmark[p + 1])
-    delta_x = landmark[::2] - x  # k x 1 Array
-    delta_y = landmark[1::2] - y  # k x 1 Array
+    # x, y, theta = X_pre[0], X_pre[1], X_pre[2]
+    # Landmarks in Global Frame
+    # landmark = np.zeros((2 * k, 1))
+    # for i in range(k):
+    #     p = 2 * i
+    #     landmark[p] = x + r[i] * np.cos(theta + beta[i])
+    #     landmark[p + 1] = y + r[i] * np.sin(theta + beta[i])
+    #     # print("Landmark", i, landmark[p], landmark[p + 1])
+    # delta_x = landmark[::2] - x  # k x 1 Array
+    # delta_y = landmark[1::2] - y  # k x 1 Array
     # print("Deltas : ", delta_x, delta_y)
 
     # * Updating Expected Pose and Covariance based on Landmarks
     for i in range(k):
-        # print("\nLandmark ", i)
-        dx, dy = delta_x[i, 0], delta_y[i, 0]
+        # print("Landmark ", i)
+        x, y, theta = X_pre[0], X_pre[1], X_pre[2]
+
+        lx = x + r[i] * np.cos(warp2pi(theta + beta[i]))
+        ly = y + r[i] * np.sin(warp2pi(theta + beta[i]))
+
+        dx = (lx - x)[0]
+        dy = (ly - y)[0]
 
         # * Predicted and True Masurements for Landmark [i]
         measure_pre = np.zeros((2, 1))
-        measure_pre[0] = np.sqrt(dx**2 + dy**2)
-        measure_pre[1] = warp2pi(np.arctan2(dy, dx) - theta)  #! warp2pi?
+        measure_pre[1] = np.sqrt(dx**2 + dy**2)
+        measure_pre[0] = warp2pi(np.arctan2(dy, dx) - theta)  #! warp2pi?
 
         measure_tru = np.zeros((2, 1))
         p = 2 * i
         measure_tru[0] = measure[p]
         measure_tru[1] = measure[p + 1]
-        measure_tru = np.flip(measure_tru)
+        # measure_tru = np.flip(measure_tru)
 
         # print("Measure Pre : ", measure_pre)
         # print("Measure Tru : ", measure_tru)
@@ -252,34 +263,33 @@ def evaluate(X, P, k, test_name):
 
     \return None
     """
-    plt.waitforbuttonpress(0)
+    # plt.waitforbuttonpress(0)
     print("Evaluation")
-    # Beta, Range
+    # X, Y
     l_true = np.array([3, 6, 3, 12, 7, 8, 7, 14, 11, 6, 11, 12], dtype=float)
     plt.scatter(l_true[0::2], l_true[1::2])
     plt.draw()
     plt.savefig("../plots/Evaluation_" + test_name + ".png", dpi=1200)
-    plt.waitforbuttonpress(0)
+    # plt.waitforbuttonpress(0)
 
+    msum = 0
     for i in range(k):
         print(f"Landmark {i} :")
         idx = 2 * i
         pred = X[idx + 3 : idx + 5, 0]
         true = l_true[idx : idx + 2]
         diff = pred - true
-        # diff = np.flip(diff)
+
         cova = P[idx + 3 : idx + 5, idx + 3 : idx + 5]
 
         maha = diff.T @ np.linalg.inv(cova) @ diff
         eucl = np.sqrt(diff @ diff.T)
 
         print(f"\tMahalanobis Distance = {maha} \tEuclidean Distance = {eucl}")
+        msum += maha
 
-    #       Final Euclidean distances :
-    #           [0.32202495 0.59551973 0.50557384 0.74724638 0.59547208 0.77927625]
-    #       Final Mahalanobis distances :
-    #           [24.232683731817676, 22.183935643004066, 49.35727822321264, 56.54759400960451, 35.43844970418464, 75.07098468312927]
-
+    print("Average Maha = ", msum / k)
+    plt.close()
     return None
 
 
@@ -333,7 +343,7 @@ def main(params, test_name=""):
 
         # Control
         if arr.shape[0] == 2:
-            print(f"{t}: Predict step")
+            # print(f"{t}: Predict step")
             d, alpha = arr[0], arr[1]
             control = np.array([[d], [alpha]])
 
@@ -345,7 +355,7 @@ def main(params, test_name=""):
 
         # Measurement
         else:
-            print(f"{t}: Update step")
+            # print(f"{t}: Update step")
             measure = np.expand_dims(arr, axis=1)
 
             ##########
@@ -363,25 +373,16 @@ def main(params, test_name=""):
 if __name__ == "__main__":
     # TEST: Setup uncertainty parameters
     # * Reference Parameters\
-    params = {
-        "sig_x": 0.25,
-        "sig_y": 0.1,
-        "sig_alpha": 0.1,
-        "sig_beta": 0.01,
-        "sig_r": 0.08,
-    }
-    # params = {
-    #     "sig_x": 0.025,
-    #     "sig_y": 0.01,
-    #     "sig_alpha": 0.05,
-    #     "sig_beta": 0.015,
-    #     "sig_r": 0.15,
-    # }
+    params = {"sig_x": 0.25, "sig_y": 0.1, "sig_alpha": 0.1, "sig_beta": 0.01, "sig_r": 0.08}
 
+    # Default
     main(params)
 
-    # Ablations
+    # Experiments
     # for sig, val in {"sig_x": 2.5, "sig_y": 1, "sig_alpha": 1, "sig_beta": 0.1, "sig_r": 0.8}.items():
     #     print("-" * 20, sig, "-" * 20)
+    #     params = {"sig_x": 0.25, "sig_y": 0.1, "sig_alpha": 0.1, "sig_beta": 0.01, "sig_r": 0.08}
     #     params[sig] = val
+    #     print(params)
+
     #     main(params, sig)
