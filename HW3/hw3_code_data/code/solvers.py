@@ -3,7 +3,7 @@
     Rewritten in Python by Wei Dong (weidong@andrew.cmu.edu), 2021
 """
 
-from scipy.sparse import csc_matrix, eye
+from scipy.sparse import csc_matrix, csr_matrix, eye
 from scipy.sparse.linalg import inv, splu, spsolve, spsolve_triangular
 from sparseqr import rz, permutation_vector_to_matrix, solve as qrsolve
 import numpy as np
@@ -22,55 +22,58 @@ def solve_pinv(A, b):
     N = A.shape[1]
     x = np.zeros((N,))
 
-    x = scipy.sparse.linalg.inv(A.T @ A) @ A.T @ b
+    x = inv(A.T @ A) @ A.T @ b
     return x, None
 
 
 def solve_lu(A, b):
     # TODO: return x, U s.t. Ax = b, and A = LU with LU decomposition.
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.splu.html
-    N = A.shape[1]
-    x = np.zeros((N,))
-    U = eye(N)
+    # N = A.shape[1]
+    # x = np.zeros((N,))
+    # U = eye(N)
 
-    A_prime = splu(A, premc_spec="NATURAL")
-    x = A_prime.solve(b)
-
+    A = csc_matrix(A.toarray())
+    lud = splu(A.T @ A, permc_spec="NATURAL")
+    x = lud.solve(A.T @ b)
+    U = lud.U.A
     return x, U
 
 
 def solve_lu_colamd(A, b):
     # TODO: return x, U s.t. Ax = b, and Permutation_rows A Permutration_cols = LU with reordered LU decomposition.
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.splu.html
-    N = A.shape[1]
-    x = np.zeros((N,))
-    U = eye(N)
-
-    A_prime = splu(A, premc_spec="COLAMD")
-    x = A_prime.solve(b)
-
+    # N = A.shape[1]
+    # x = np.zeros((N,))
+    # U = eye(N)
+    A = csc_matrix(A.toarray())
+    lud = splu(A.T @ A, permc_spec="COLAMD")
+    x = lud.solve(A.T @ b)
+    U = lud.U.A
     return x, U
 
 
 def solve_qr(A, b):
     # TODO: return x, R s.t. Ax = b, and |Ax - b|^2 = |Rx - d|^2 + |e|^2
     # https://github.com/theNded/PySPQR
-    N = A.shape[1]
-    x = np.zeros((N,))
-    R = eye(N)
-
-    Z, R, E, rank = rz()
-
-    x = spsolve_triangular
+    # N = A.shape[1]
+    # x = np.zeros((N,))
+    # R = eye(N)
+    z, R, E, rank = rz(A, b, permc_spec="NATURAL")
+    x = spsolve_triangular(csr_matrix(R), z, lower=False)
     return x, R
 
 
 def solve_qr_colamd(A, b):
     # TODO: return x, R s.t. Ax = b, and |Ax - b|^2 = |R E^T x - d|^2 + |e|^2, with reordered QR decomposition (E is the permutation matrix).
     # https://github.com/theNded/PySPQR
-    N = A.shape[1]
-    x = np.zeros((N,))
-    R = eye(N)
+    # N = A.shape[1]
+    # x = np.zeros((N,))
+    # R = eye(N)
+    z, R, E, rank = rz(A, b, permc_spec="COLAMD")
+    E = permutation_vector_to_matrix(E)
+    x = spsolve_triangular(R, z, lower=False)
+    x = E @ x
     return x, R
 
 

@@ -12,9 +12,6 @@ import matplotlib.pyplot as plt
 from solvers import *
 from utils import *
 
-from PIL import Image as im
-import pandas as pd
-
 
 def create_linear_system(odoms, observations, sigma_odom, sigma_observation, n_poses, n_landmarks):
     """
@@ -42,32 +39,30 @@ def create_linear_system(odoms, observations, sigma_odom, sigma_observation, n_p
     sqrt_inv_odom = np.linalg.inv(scipy.linalg.sqrtm(sigma_odom))
     sqrt_inv_obs = np.linalg.inv(scipy.linalg.sqrtm(sigma_observation))
 
-    H = np.array([[-1, 0, 1, 0], [0, -1, 0, 1]])
     # TODO: First fill in the prior to anchor the 1st pose at (0, 0)
     A[:2, :2] = sqrt_inv_odom
+    H = np.array([[-1, 0, 1, 0], [0, -1, 0, 1]])
 
     # TODO: Then fill in odometry measurements
-    X0 = np.zeros((1, 2), dtype=np.float32)
     for i in range(1, n_odom):
         x = 2 * i
         y = 2 * (i - 1)
-        A[x : x + 2, y : y + 4] = sqrt_inv_odom @ H.copy()
-        b[x : x + 2] = sqrt_inv_odom @ (odoms[i] - odoms[i - 1]).T
+        A[x : x + 2, y : y + 4] = sqrt_inv_odom @ H
+        b[x : x + 2] = sqrt_inv_odom @ odoms[i]
 
     # TODO: Then fill in landmark measurements
-    pose_idx = observations[:, 1].astype("int64")
-    land_idx = observations[:, 2].astype("int64")
-    for p, l in zip(pose_idx, land_idx):
-        i = (n_odom + 1 + l) * 2 - 1
-        ip = 2 * p
-        il = (n_poses + l) * 2 - 1
-        # print(f"Pose {p} and Landmark {l} : ({i},{ip}) and ({i},{il})")
-        A[i : i + 2, ip : ip + 2] = sqrt_inv_obs @ H[:, :2].copy()
-        A[i : i + 2, il : il + 2] = sqrt_inv_obs @ H[:, 2:].copy()
-        b[i : i + 2] = sqrt_inv_obs @ (observations[l, 2:] - odoms[p]).T
+    for i in range(n_obs):
+        pose_idx = int(observations[i, 0])
+        land_idx = int(observations[i, 1])
 
-    plt.imshow(A, interpolation="nearest")
-    plt.savefig("a_matrix.png")
+        idx = (n_odom + i + 1) * 2
+        idxl = (n_poses + land_idx) * 2
+        idxp = 2 * pose_idx
+
+        A[idx : idx + 2, idxp : idxp + 2] = sqrt_inv_obs @ H[:, :2]
+        A[idx : idx + 2, idxl : idxl + 2] = sqrt_inv_obs @ H[:, 2:]
+        b[idx : idx + 2] = sqrt_inv_obs @ observations[i, 2:]
+
     return csr_matrix(A), b
 
 
@@ -80,16 +75,17 @@ if __name__ == "__main__":
     parser.add_argument("--repeats", type=int, default=1, help="Number of repeats in evaluation efficiency. Increase to ensure stablity.")
     args = parser.parse_args()
 
+    print("Loading Data")
     data = np.load(args.data)
-    print("Loaded Data!")
+
     # Plot gt trajectory and landmarks for a sanity check.
     gt_traj = data["gt_traj"]
     gt_landmarks = data["gt_landmarks"]
-    plt.plot(gt_traj[:, 0], gt_traj[:, 1], "b-", label="gt trajectory")
-    plt.scatter(gt_landmarks[:, 0], gt_landmarks[:, 1], c="b", marker="+", label="gt landmarks")
-    plt.legend()
-    plt.show()
-    plt.savefig("init.png")
+    # plt.plot(gt_traj[:, 0], gt_traj[:, 1], "b-", label="gt trajectory")
+    # plt.scatter(gt_landmarks[:, 0], gt_landmarks[:, 1], c="b", marker="+", label="gt landmarks")
+    # plt.legend()
+    # plt.show()
+    # plt.savefig("init.png")
 
     n_poses = len(gt_traj)
     n_landmarks = len(gt_landmarks)
@@ -99,8 +95,8 @@ if __name__ == "__main__":
     sigma_odom = data["sigma_odom"]
     sigma_landmark = data["sigma_landmark"]
 
-    print(n_poses, n_landmarks)
-    print(odoms.shape, observations.shape, sigma_odom.shape, sigma_landmark.shape)
+    # print(n_poses, n_landmarks)
+    # print(odoms.shape, observations.shape, sigma_odom.shape, sigma_landmark.shape)
     # print(odoms, observations, sigma_odom, sigma_landmark)
 
     # Build a linear system
@@ -127,4 +123,5 @@ if __name__ == "__main__":
         traj, landmarks = devectorize_state(x, n_poses)
 
         # Visualize the final result
-        plot_traj_and_landmarks(traj, landmarks, gt_traj, gt_landmarks)
+        print("Visualize Final Result")
+        plot_traj_and_landmarks(traj, landmarks, gt_traj, gt_landmarks, method)

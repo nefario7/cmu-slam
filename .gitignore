@@ -1,5 +1,6 @@
 .slam
 .uslam
+.solver
 *.pyc
 
 #HW1
