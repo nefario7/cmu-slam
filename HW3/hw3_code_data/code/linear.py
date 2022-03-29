@@ -70,11 +70,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data", help="path to npz file")
     parser.add_argument(
-        "--method", nargs="+", choices=["default", "pinv", "qr", "lu", "qr_colamd", "lu_colamd"], default=["default"], help="method"
+        "--method",
+        nargs="+",
+        choices=["default", "pinv", "qr", "lu", "qr_colamd", "lu_colamd", "custom_lu"],
+        default=["default"],
+        help="method",
     )
     parser.add_argument("--repeats", type=int, default=1, help="Number of repeats in evaluation efficiency. Increase to ensure stablity.")
     args = parser.parse_args()
-
+    print("\n" + "-" * 80)
     print("Loading Data")
     data = np.load(args.data)
 
@@ -119,9 +123,11 @@ if __name__ == "__main__":
         if R is not None:
             plt.spy(R)
             plt.show()
+            matrix_fig_path = r"../plots/" + method + "_matrix.png"
+            plt.savefig(matrix_fig_path)
+            plt.close()
 
         traj, landmarks = devectorize_state(x, n_poses)
 
         # Visualize the final result
-        print("Visualize Final Result")
         plot_traj_and_landmarks(traj, landmarks, gt_traj, gt_landmarks, method)

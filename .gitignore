@@ -1,6 +1,7 @@
 .slam
 .uslam
 .solver
+.vscode
 *.pyc
 
 #HW1

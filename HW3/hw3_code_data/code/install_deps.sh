@@ -3,6 +3,10 @@ pip install numpy
 pip install cffi
 pip install scipy
 pip install matplotlib
+pip install wheel
+pip install tqdm
+
+pip install git+https://github.com/theNded/PySPQR.git
 
 # # CMake
 # sudo apt-get install cmake -y
@@ -14,5 +18,3 @@ pip install matplotlib
 # sudo apt-get install libeigen3-dev -y 
 # # SuiteSparse and CXSparse (optional)
 # sudo apt-get install libsuitesparse-dev -y
-
-pip install git+https://github.com/theNded/PySPQR.git
