@@ -182,9 +182,9 @@ if __name__ == "__main__":
     # Plot gt trajectory and landmarks for a sanity check.
     gt_traj = data["gt_traj"]
     gt_landmarks = data["gt_landmarks"]
-    # plt.plot(gt_traj[:, 0], gt_traj[:, 1], "b-")
-    # plt.scatter(gt_landmarks[:, 0], gt_landmarks[:, 1], c="b", marker="+")
-    # plt.show()
+    plt.plot(gt_traj[:, 0], gt_traj[:, 1], "b-")
+    plt.scatter(gt_landmarks[:, 0], gt_landmarks[:, 1], c="b", marker="+")
+    plt.show()
 
     n_poses = len(gt_traj)
     n_landmarks = len(gt_landmarks)
