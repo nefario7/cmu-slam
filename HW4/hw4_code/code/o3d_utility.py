@@ -1,7 +1,7 @@
-'''
+"""
     Initially written by Ming Hsiao in MATLAB
     Redesigned and rewritten by Wei Dong (weidong@andrew.cmu.edu)
-'''
+"""
 
 import open3d as o3d
 import numpy as np
@@ -27,17 +27,12 @@ def visualize_icp(source_points, target_points, T):
     pcd_target.paint_uniform_color([0, 1, 0])
 
     pcd_source.transform(T)
-    o3d.visualization.draw_geometries([
-        pcd_source.transform(flip_transform),
-        pcd_target.transform(flip_transform)
-    ])
+    o3d.visualization.draw_geometries([pcd_source.transform(flip_transform), pcd_target.transform(flip_transform)])
 
 
 def visualize_correspondences(source_points, target_points, T):
     if len(source_points) != len(target_points):
-        print(
-            'Error! source points and target points has different length {} vs {}'
-            .format(len(source_points), len(target_points)))
+        print("Error! source points and target points has different length {} vs {}".format(len(source_points), len(target_points)))
         return
 
     pcd_source = make_point_cloud(source_points)
@@ -53,7 +48,6 @@ def visualize_correspondences(source_points, target_points, T):
     for k in range(len(source_points)):
         corres.append((k, k))
 
-    lineset = o3d.geometry.LineSet.create_from_point_cloud_correspondences(
-        pcd_source, pcd_target, corres)
+    lineset = o3d.geometry.LineSet.create_from_point_cloud_correspondences(pcd_source, pcd_target, corres)
 
     o3d.visualization.draw_geometries([pcd_source, pcd_target, lineset])

@@ -1,7 +1,7 @@
-'''
+"""
     Initially written by Ming Hsiao in MATLAB
     Redesigned and rewritten by Wei Dong (weidong@andrew.cmu.edu)
-'''
+"""
 
 import os
 import argparse
@@ -27,7 +27,7 @@ def load_gt_poses(gt_filename):
     with open(gt_filename) as f:
         content = f.readlines()
         for line in content:
-            data = np.array(list(map(float, line.strip().split(' '))))
+            data = np.array(list(map(float, line.strip().split(" "))))
             indices.append(int(data[0]))
 
             data = data[1:]
@@ -47,33 +47,30 @@ def load_gt_poses(gt_filename):
     return indices, Ts
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        'path', help='path to the dataset folder containing rgb/ and depth/')
+    parser.add_argument("path", help="path to the dataset folder containing rgb/ and depth/")
     args = parser.parse_args()
 
     # Load intrinsics and gt poses for evaluation
-    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic('intrinsics.json')
+    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic("intrinsics.json")
     intrinsic = np.array(intrinsic_struct.intrinsic_matrix)
-    indices, gt_poses = load_gt_poses(
-        os.path.join(args.path, 'livingRoom2.gt.freiburg'))
+    indices, gt_poses = load_gt_poses(os.path.join(args.path, "livingRoom2.gt.freiburg"))
     depth_scale = 5000.0
 
-    depth_path = os.path.join(args.path, 'depth')
-    normal_path = os.path.join(args.path, 'normal')
+    depth_path = os.path.join(args.path, "depth")
+    normal_path = os.path.join(args.path, "normal")
     os.makedirs(normal_path, exist_ok=True)
 
     # Generate normal maps
     # WARNING: please start from index 1, as ground truth poses are provided starting from index 1.
     for i in indices:
-        print('Preprocessing frame {:03d}'.format(i))
-        depth = np.asarray(o3d.io.read_image('{}/{}.png'.format(
-            depth_path, i))) / depth_scale
+        print("Preprocessing frame {:03d}".format(i))
+        depth = np.asarray(o3d.io.read_image("{}/{}.png".format(depth_path, i))) / depth_scale
         vertex_map = transforms.unproject(depth, intrinsic)
 
         pcd = o3d_utility.make_point_cloud(vertex_map.reshape((-1, 3)))
         pcd.estimate_normals()
 
         normal_map = np.asarray(pcd.normals).reshape(vertex_map.shape)
-        np.save('{}/{}.npy'.format(normal_path, i), normal_map)
+        np.save("{}/{}.npy".format(normal_path, i), normal_map)

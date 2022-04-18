@@ -1,7 +1,7 @@
-'''
+"""
     Initially written by Ming Hsiao in MATLAB
     Redesigned and rewritten by Wei Dong (weidong@andrew.cmu.edu)
-'''
+"""
 import os
 import argparse
 import numpy as np
@@ -23,8 +23,10 @@ class Map:
         self.weights = np.empty((0, 1))
         self.initialized = False
 
+        self.without_fusion = 0
+
     def merge(self, indices, points, normals, colors, R, t):
-        '''
+        """
         TODO: implement the merge function
         \param self The current maintained map
         \param indices Indices of selected points. Used for IN PLACE modification.
@@ -34,11 +36,22 @@ class Map:
         \param R rotation from camera (input) to world (map), (3, 3)
         \param t translation from camera (input) to world (map), (3, )
         \return None, update map properties IN PLACE
-        '''
-        pass
+        """
+        points_T = R @ points.T + t
+        normals_T = R @ normals.T
+
+        total = self.weights[indices] + 1
+        self.points[indices] = (self.weights[indices] * self.points[indices] + points_T.T) / total
+        self.normals[indices] = (self.weights[indices] * self.normals[indices] + normals_T.T) / total
+        self.colors[indices] = (self.weights[indices] * self.colors[indices] + colors) / total
+
+        self.normals[indices] /= np.linalg.norm(self.normals[indices], axis=1, keepdims=True)  # Normalizing the normals
+        self.weights[indices] += 1  #
+
+        return None
 
     def add(self, points, normals, colors, R, t):
-        '''
+        """
         TODO: implement the add function
         \param self The current maintained map
         \param points Input associated points, (N, 3)
@@ -47,11 +60,16 @@ class Map:
         \param R rotation from camera (input) to world (map), (3, 3)
         \param t translation from camera (input) to world (map), (3, )
         \return None, update map properties by concatenation
-        '''
-        pass
+        """
+        self.points = np.concatenate((self.points, (R @ points.T + t).T))
+        self.normals = np.concatenate((self.normals, (R @ normals.T).T))
+        self.colors = np.concatenate((self.colors, colors))
+        self.weights = np.concatenate((self.weights, np.ones((points.shape[0], 1))))
+
+        return None
 
     def filter_pass1(self, us, vs, ds, h, w):
-        '''
+        """
         TODO: implement the filter function
         \param self The current maintained map, unused
         \param us Putative corresponding u coordinates on an image, (N, 1)
@@ -60,12 +78,12 @@ class Map:
         \param h Height of the image projected to
         \param w Width of the image projected to
         \return mask (N, 1) in bool indicating the valid coordinates
-        '''
-        return np.zeros_like(us)
+        """
+        mask = ((us >= 0) & (us < w) & (vs >= 0) & (vs < h) & (ds >= 0)).astype(bool)
+        return mask
 
-    def filter_pass2(self, points, normals, input_points, input_normals,
-                     dist_diff, angle_diff):
-        '''
+    def filter_pass2(self, points, normals, input_points, input_normals, dist_diff, angle_diff):
+        """
         TODO: implement the filter function
         \param self The current maintained map, unused
         \param points Maintained associated points, (M, 3)
@@ -75,25 +93,22 @@ class Map:
         \param dist_diff Distance difference threshold to filter correspondences by positions
         \param angle_diff Angle difference threshold to filter correspondences by normals
         \return mask (N, 1) in bool indicating the valid correspondences
-        '''
-        return np.zeros((len(points)))
+        """
+        mask_dist = np.linalg.norm(points - input_points, axis=1) < dist_diff
+        angle = (normals * input_normals).sum(axis=1)
+        mask_angle = np.abs(np.arccos(np.clip(angle, -1, 1))) < angle_diff
 
-    def fuse(self,
-             vertex_map,
-             normal_map,
-             color_map,
-             intrinsic,
-             T,
-             dist_diff=0.03,
-             angle_diff=np.deg2rad(5)):
-        '''
+        return mask_dist & mask_angle
+
+    def fuse(self, vertex_map, normal_map, color_map, intrinsic, T, dist_diff=0.03, angle_diff=np.deg2rad(5)):
+        """
         \param self The current maintained map
         \param vertex_map Input vertex map, (H, W, 3)
         \param normal_map Input normal map, (H, W, 3)
         \param intrinsic Intrinsic matrix, (3, 3)
         \param T transformation from camera (input) to world (map), (4, 4)
         \return None, update map properties on demand
-        '''
+        """
         # Camera to world
         R = T[:3, :3]
         t = T[:3, 3:]
@@ -103,6 +118,8 @@ class Map:
         R_inv = T_inv[:3, :3]
         t_inv = T_inv[:3, 3:]
 
+        self.without_fusion += source_vertex_map.reshape(-1, 3).shape[0]
+
         if not self.initialized:
             points = vertex_map.reshape((-1, 3))
             normals = normal_map.reshape((-1, 3))
@@ -111,7 +128,6 @@ class Map:
             # TODO: add step
             self.add(points, normals, colors, R, t)
             self.initialized = True
-
         else:
             h, w, _ = vertex_map.shape
 
@@ -121,32 +137,32 @@ class Map:
             R_normals = (R_inv @ self.normals.T).T
 
             # Projective association
-            us, vs, ds = transforms.project(T_points, intrinsic)
+            us, vs, ds = transforms.project(T_points, intrinsic)  # ? Project to image
             us = np.round(us).astype(int)
             vs = np.round(vs).astype(int)
 
             # TODO: first filter: valid projection
-            mask = self.filter_pass1(us, vs, ds, h, w)
+            mask = self.filter_pass1(us, vs, ds, h, w)  # ? Filter points within the image frame and positive depth
             # Should not happen -- placeholder before implementation
-            if mask.sum() == 0:
-                return
+            # if mask.sum() == 0:
+            #     return
             # End of TODO
 
             indices = indices[mask]
             us = us[mask]
             vs = vs[mask]
-
-            T_points = T_points[indices]
+            T_points = T_points[indices]  # ? Keep filtered
             R_normals = R_normals[indices]
             valid_points = vertex_map[vs, us]
             valid_normals = normal_map[vs, us]
 
             # TODO: second filter: apply thresholds
-            mask = self.filter_pass2(T_points, R_normals, valid_points,
-                                     valid_normals, dist_diff, angle_diff)
+            mask = self.filter_pass2(
+                T_points, R_normals, valid_points, valid_normals, dist_diff, angle_diff
+            )  # ? Filter points by distance and angle between normals
             # Should not happen -- placeholder before implementation
-            if mask.sum() == 0:
-                return
+            # if mask.sum() == 0:
+            #     return
             # End of TODO
 
             indices = indices[mask]
@@ -160,51 +176,47 @@ class Map:
             merged_colors = color_map[vs, us]
 
             # TODO: Merge step - compute weight average after transformation
-            self.merge(indices, merged_points, merged_normals, merged_colors,
-                       R, t)
+            self.merge(indices, merged_points, merged_normals, merged_colors, R, t)
             # End of TODO
 
             associated_mask = np.zeros((h, w)).astype(bool)
             associated_mask[vs, us] = True
-            new_points = vertex_map[~associated_mask]
-            new_normals = normal_map[~associated_mask]
-            new_colors = color_map[~associated_mask]
+            new_points = vertex_map[~associated_mask]  # ? Remove points that have associations
+            new_normals = normal_map[~associated_mask]  # ? Remove points that have associations
+            new_colors = color_map[~associated_mask]  # ? Remove points that have associations
 
             # TODO: Add step
             self.add(new_points, new_normals, new_colors, R, t)
             # End of TODO
 
             added_entries = len(new_points)
-            print('updated: {}, added: {}, total: {}'.format(
-                updated_entries, added_entries, len(self.points)))
+            print(
+                "updated: {}, added: {}, total: {}, naive: {}, COMPRESSION: {:.2f}".format(
+                    updated_entries,
+                    added_entries,
+                    len(self.points),
+                )
+            )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument(
-        'path', help='path to the dataset folder containing rgb/ and depth/')
-    parser.add_argument('--start_idx',
-                        type=int,
-                        help='index to the source depth/normal maps',
-                        default=1)
-    parser.add_argument('--end_idx',
-                        type=int,
-                        help='index to the source depth/normal maps',
-                        default=200)
-    parser.add_argument('--downsample_factor', type=int, default=2)
+    parser.add_argument("path", help="path to the dataset folder containing rgb/ and depth/")
+    parser.add_argument("--start_idx", type=int, help="index to the source depth/normal maps", default=1)
+    parser.add_argument("--end_idx", type=int, help="index to the source depth/normal maps", default=200)
+    parser.add_argument("--downsample_factor", type=int, default=2)
     args = parser.parse_args()
 
-    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic('intrinsics.json')
+    intrinsic_struct = o3d.io.read_pinhole_camera_intrinsic("intrinsics.json")
     intrinsic = np.array(intrinsic_struct.intrinsic_matrix)
-    indices, gt_poses = load_gt_poses(
-        os.path.join(args.path, 'livingRoom2.gt.freiburg'))
+    indices, gt_poses = load_gt_poses(os.path.join(args.path, "livingRoom2.gt.freiburg"))
     # TUM convention
     depth_scale = 5000.0
 
-    rgb_path = os.path.join(args.path, 'rgb')
-    depth_path = os.path.join(args.path, 'depth')
-    normal_path = os.path.join(args.path, 'normal')
+    rgb_path = os.path.join(args.path, "rgb")
+    depth_path = os.path.join(args.path, "depth")
+    normal_path = os.path.join(args.path, "normal")
 
     m = Map()
 
@@ -213,25 +225,20 @@ if __name__ == '__main__':
     intrinsic[2, 2] = 1
 
     for i in range(args.start_idx, args.end_idx + 1):
-        print('Fusing frame {:03d}'.format(i))
-        source_depth = o3d.io.read_image('{}/{}.png'.format(depth_path, i))
+        print("Fusing frame {:03d}".format(i))
+        source_depth = o3d.io.read_image("{}/{}.png".format(depth_path, i))
         source_depth = np.asarray(source_depth) / depth_scale
         source_depth = source_depth[::down_factor, ::down_factor]
+
         source_vertex_map = transforms.unproject(source_depth, intrinsic)
 
-        source_color_map = np.asarray(
-            o3d.io.read_image('{}/{}.png'.format(rgb_path,
-                                                 i))).astype(float) / 255.0
+        source_color_map = np.asarray(o3d.io.read_image("{}/{}.png".format(rgb_path, i))).astype(float) / 255.0
         source_color_map = source_color_map[::down_factor, ::down_factor]
 
-        source_normal_map = np.load('{}/{}.npy'.format(normal_path, i))
+        source_normal_map = np.load("{}/{}.npy".format(normal_path, i))
         source_normal_map = source_normal_map[::down_factor, ::down_factor]
 
-        m.fuse(source_vertex_map, source_normal_map, source_color_map,
-               intrinsic, gt_poses[i])
+        m.fuse(source_vertex_map, source_normal_map, source_color_map, intrinsic, gt_poses[i])
 
-    global_pcd = o3d_utility.make_point_cloud(m.points,
-                                              colors=m.colors,
-                                              normals=m.normals)
-    o3d.visualization.draw_geometries(
-        [global_pcd.transform(o3d_utility.flip_transform)])
+    global_pcd = o3d_utility.make_point_cloud(m.points, colors=m.colors, normals=m.normals)
+    o3d.visualization.draw_geometries([global_pcd.transform(o3d_utility.flip_transform)])
